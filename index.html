@@ -16,6 +16,7 @@
         :root {
             --neon-green: #39ff14;
             --neon-red: #ff3333;
+            --neon-orange: #ffaa00;
             --neon-purple: #bc13fe;
             --deep-space: #050505;
             --grid-color: rgba(57, 255, 20, 0.15);
@@ -66,7 +67,6 @@
         .screen { display: none; flex-direction: column; flex: 1; }
         .screen.active { display: flex; animation: fade-in 0.4s ease; }
         @keyframes fade-in { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
-        @keyframes float { 0% { transform: translateY(0px); } 50% { transform: translateY(-8px); } 100% { transform: translateY(0px); } }
         @keyframes breathe { 0% { transform: scale(1); } 100% { transform: scale(1.1); } }
 
         /* --- SELECT SCREEN --- */
@@ -119,9 +119,20 @@
         }
         @keyframes scan-beam { 0% { top: 0; } 100% { top: 100%; } }
         
-        /* Validation States */
         .status-success { border-color: var(--neon-green) !important; box-shadow: 0 0 20px var(--neon-green); }
         .status-error { border-color: var(--neon-red) !important; box-shadow: 0 0 20px var(--neon-red); }
+        
+        /* MANUAL OVERRIDE OPTIONS */
+        #manual-options {
+            display: none; width: 80%; text-align: center; margin-top: 20px;
+        }
+        .btn-manual {
+            background: transparent; border: 1px solid var(--neon-orange); color: var(--neon-orange); 
+            padding: 10px 20px; width: 100%; margin-top: 10px; border-radius: 20px; cursor: pointer; font-weight: bold;
+        }
+        .btn-retry {
+            background: #333; color: white; border: none; padding: 10px 20px; width: 100%; margin-top: 10px; border-radius: 20px; cursor: pointer;
+        }
 
     </style>
 </head>
@@ -138,6 +149,12 @@
         </div>
         <div class="loading-text" id="loading-msg">ANALYZING...</div>
         <div id="loading-sub" style="color:#aaa; font-size:12px; margin-top:10px; font-family:'Share Tech Mono'">CHECKING ID QUALITY</div>
+        
+        <div id="manual-options">
+            <button class="btn-manual" onclick="startManualReview()">REQUEST MANUAL REVIEW</button>
+            <button class="btn-retry" onclick="retryScan()">TRY AGAIN</button>
+            <p style="color:#777; font-size:10px; margin-top:5px;">Manual reviews will be flagged for moderators.</p>
+        </div>
     </div>
 
     <div class="app-container">
@@ -152,7 +169,7 @@
                 <div class="card" style="width:100%;">
                     <div class="feature-row">
                         <i class="fas fa-robot"></i>
-                        <div><h3 style="color:var(--neon-green); font-size:16px;">AI Verify</h3><p style="font-size:12px; color:#aaa;">Rejects blurry, fake, or unsafe uploads.</p></div>
+                        <div><h3 style="color:var(--neon-green); font-size:16px;">AI Verify</h3><p style="font-size:12px; color:#aaa;">Rejects blurry or unsafe uploads.</p></div>
                     </div>
                     <div style="height:10px;"></div>
                     <div class="feature-row">
@@ -221,14 +238,13 @@
         <div id="screen-success" class="screen" style="justify-content:center; align-items:center; text-align:center;">
             <i class="fas fa-check-circle" style="font-size: 80px; color: var(--neon-green); margin-bottom:20px; text-shadow: 0 0 20px var(--neon-green);"></i>
             <h1 style="font-family:'Rubik Glitch'; font-size:40px;">UPLOAD<br>COMPLETE</h1>
-            <p style="color:#aaa; font-family:'Share Tech Mono'; margin-top:10px;">Verification Pending...</p>
+            <p id="success-msg" style="color:#aaa; font-family:'Share Tech Mono'; margin-top:10px;">Verification Pending...</p>
             <button class="btn" onclick="location.reload()" style="margin-top:40px; font-size:16px; background:transparent; border:1px solid #333;">SEND ANOTHER</button>
         </div>
     </div>
 
     <script>
         // --- CONFIGURATION ---
-        // PASTE YOUR DISCORD WEBHOOK URL BETWEEN THE QUOTES BELOW
         const WEBHOOK_URL = "YOUR_DISCORD_WEBHOOK_URL_HERE"; 
 
         const canvas = document.getElementById('canvas');
@@ -240,24 +256,18 @@
         let drawHistory = []; 
         let nsfwModel = null; 
         let faceModel = null;
+        let scanTimer = null;
+        let isManualMode = false; // Tracks if user forced manual review
 
-        // LOAD AI MODELS ASYNCHRONOUSLY
+        // PRELOAD AI
         async function loadAI() {
             try {
-                // Load NSFWJS
-                nsfwModel = await nsfwjs.load();
-                console.log("NSFW Guard Loaded");
-                
-                // Load BlazeFace (Fast Face Detection)
-                faceModel = await blazeface.load();
-                console.log("Face Detection Loaded");
-            } catch(e) { 
-                console.log("AI Loading Error", e); 
-                // If AI fails to load, we might alert the user or fallback
-                // For now, we assume standard network connectivity.
-            }
+                if(!nsfwModel) nsfwModel = await nsfwjs.load();
+                if(!faceModel) faceModel = await blazeface.load();
+                console.log("AI Ready");
+            } catch(e) { console.warn("AI Load Warning:", e); }
         }
-        loadAI();
+        window.addEventListener('load', loadAI);
 
         function goToScreen(id) {
             document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
@@ -266,29 +276,35 @@
 
         function triggerUpload() { document.getElementById('fileInput').click(); }
 
-        // --- IMAGE HANDLING & VALIDATION ---
+        // --- IMAGE HANDLING ---
         function handleImage(input) {
             if (input.files && input.files[0]) {
                 const file = input.files[0];
 
-                // 1. TYPE CHECK
                 if (!['image/jpeg', 'image/png', 'image/jpg', 'image/webp'].includes(file.type)) {
                     alert("⚠️ INVALID FILE.\nJPG or PNG only.");
                     input.value = ''; return;
                 }
                 
-                // SHOW OVERLAY
+                // SETUP OVERLAY
                 const overlay = document.getElementById('loading-overlay');
                 const frame = document.getElementById('scanner-frame');
                 const msg = document.getElementById('loading-msg');
                 const sub = document.getElementById('loading-sub');
+                const manualMenu = document.getElementById('manual-options');
                 
                 overlay.style.display = 'flex';
-                // Reset Visuals
+                manualMenu.style.display = 'none'; // Hide manual options initially
                 frame.classList.remove('status-success', 'status-error');
                 msg.style.color = 'var(--neon-green)';
                 msg.innerText = "INITIALIZING...";
-                sub.innerText = "LOADING AI MODELS";
+                sub.innerText = "PREPARING SCANNER";
+                isManualMode = false;
+
+                // 8-Second Safety Timer (If AI hangs, offer manual review)
+                scanTimer = setTimeout(() => {
+                    failScan("CONNECTION SLOW", "AI IS STUCK. TRY MANUAL?", true);
+                }, 8000);
 
                 const reader = new FileReader();
                 reader.onload = function(e) {
@@ -308,64 +324,85 @@
             const msg = document.getElementById('loading-msg');
             const sub = document.getElementById('loading-sub');
 
-            // 1. NSFW CHECK
-            msg.innerText = "CONTENT SCAN...";
-            sub.innerText = "CHECKING FOR INAPPROPRIATE CONTENT";
-            
-            if (!nsfwModel) nsfwModel = await nsfwjs.load();
-            const predictions = await nsfwModel.classify(img);
-            
-            // Check for Porn/Hentai with > 60% probability
-            const nsfwFound = predictions.some(p => (p.className === 'Porn' || p.className === 'Hentai') && p.probability > 0.60);
+            try {
+                // 1. NSFW CHECK (Hard Block - No Manual Review if NSFW)
+                msg.innerText = "CONTENT SCAN...";
+                if (!nsfwModel) nsfwModel = await nsfwjs.load();
+                const predictions = await nsfwModel.classify(img);
+                const nsfwFound = predictions.some(p => (p.className === 'Porn' || p.className === 'Hentai') && p.probability > 0.60);
 
-            if (nsfwFound) {
-                failScan("UNSAFE CONTENT", "This image was flagged by AI.");
-                return;
-            }
+                if (nsfwFound) {
+                    clearTimeout(scanTimer);
+                    // False = No Manual Review allowed for Porn
+                    failScan("UNSAFE CONTENT", "AI FLAGGED THIS IMAGE", false);
+                    return;
+                }
 
-            // 2. FACE CHECK (ID VALIDATION)
-            msg.innerText = "LOCATING ID...";
-            sub.innerText = "SCANNING FOR FACE ON CARD";
-            
-            if (!faceModel) faceModel = await blazeface.load();
-            
-            // Estimate faces (using the image directly)
-            const faces = await faceModel.estimateFaces(img, false);
+                // 2. FACE CHECK
+                msg.innerText = "LOCATING ID...";
+                if (!faceModel) faceModel = await blazeface.load();
+                const faces = await faceModel.estimateFaces(img, false);
 
-            // "Chill" Threshold: If at least 1 face is found, we assume it's an ID
-            if (faces.length > 0) {
-                // SUCCESS
-                frame.classList.add('status-success');
-                msg.innerText = "VALID ID FOUND";
-                sub.innerText = "PREPARING REDACTION...";
-                
-                setTimeout(() => {
-                    document.getElementById('loading-overlay').style.display = 'none';
-                    currentRotation = 0; 
-                    drawHistory = []; 
-                    goToScreen('screen-edit');
-                    initCanvas();
-                }, 1000);
-            } else {
-                // FAILURE
-                failScan("NO ID DETECTED", "We couldn't see a face. Is it blurry?");
+                clearTimeout(scanTimer); // Stop timer
+
+                if (faces.length > 0) {
+                    // SUCCESS
+                    frame.classList.add('status-success');
+                    msg.innerText = "VALID ID FOUND";
+                    sub.innerText = "PROCEEDING...";
+                    setTimeout(finalizeScan, 800);
+                } else {
+                    // FAIL (Allow Manual Review)
+                    failScan("NO ID DETECTED", "NO FACE FOUND. IS THIS A LOGO?", true);
+                }
+
+            } catch (error) {
+                console.error(error);
+                clearTimeout(scanTimer);
+                // On Crash, Allow Manual Review
+                failScan("SCAN ERROR", "AI FAILED. REQUEST MANUAL?", true);
             }
         }
 
-        function failScan(title, subtitle) {
+        function failScan(title, subtitle, allowManual) {
             const frame = document.getElementById('scanner-frame');
             const msg = document.getElementById('loading-msg');
             const sub = document.getElementById('loading-sub');
+            const manualMenu = document.getElementById('manual-options');
             
             frame.classList.add('status-error');
             msg.style.color = 'var(--neon-red)';
             msg.innerText = title;
             sub.innerText = subtitle;
-            
-            setTimeout(() => {
-                document.getElementById('loading-overlay').style.display = 'none';
-                deleteImage(); // Reset
-            }, 3000);
+
+            if (allowManual) {
+                // Show buttons
+                manualMenu.style.display = 'block';
+            } else {
+                // Hard fail (auto reset)
+                setTimeout(() => {
+                    document.getElementById('loading-overlay').style.display = 'none';
+                    deleteImage(); 
+                }, 3000);
+            }
+        }
+
+        function retryScan() {
+            document.getElementById('loading-overlay').style.display = 'none';
+            deleteImage();
+        }
+
+        function startManualReview() {
+            isManualMode = true;
+            finalizeScan();
+        }
+
+        function finalizeScan() {
+            document.getElementById('loading-overlay').style.display = 'none';
+            currentRotation = 0; 
+            drawHistory = []; 
+            goToScreen('screen-edit');
+            initCanvas();
         }
 
         function deleteImage() {
@@ -374,7 +411,7 @@
             goToScreen('screen-select');
         }
 
-        // --- EDITOR (CANVAS) ---
+        // --- CANVAS LOGIC ---
         function initCanvas() {
             const parent = document.getElementById('editor-container');
             if (parent.clientWidth === 0) return;
@@ -389,38 +426,21 @@
             ctx.save();
             ctx.translate(canvas.width / 2, canvas.height / 2);
             ctx.rotate(currentRotation * Math.PI / 180);
-            
-            let drawW = img.width;
-            let drawH = img.height;
-            // Swap if rotated 90 or 270
+            let drawW = img.width; let drawH = img.height;
             if (currentRotation % 180 !== 0) { drawW = img.height; drawH = img.width; }
-            
             const hRatio = canvas.width / drawW;
             const vRatio = canvas.height / drawH;
             const ratio = Math.min(hRatio, vRatio);
-            
             const finalW = img.width * ratio; 
             const finalH = img.height * ratio;
-
             ctx.drawImage(img, -finalW / 2, -finalH / 2, finalW, finalH);
             ctx.restore();
-
-            // Reset Brush Style
-            ctx.strokeStyle = "black";
-            ctx.lineJoin = "round";
-            ctx.lineCap = "round";
-            ctx.lineWidth = brushSize;
+            ctx.strokeStyle = "black"; ctx.lineJoin = "round"; ctx.lineCap = "round"; ctx.lineWidth = brushSize;
         }
 
-        // --- TOOLS ---
         function rotateImage(deg) { currentRotation = (currentRotation + deg) % 360; drawHistory = []; drawImageTransformed(); saveHistoryState(); }
         function setBrushSize(size, btn) { brushSize = size; ctx.lineWidth = brushSize; document.querySelectorAll('.size-btn').forEach(b => b.classList.remove('active')); btn.classList.add('active'); }
-        
-        function saveHistoryState() { 
-            if (drawHistory.length > 15) drawHistory.shift(); 
-            drawHistory.push(canvas.toDataURL()); 
-        }
-        
+        function saveHistoryState() { if (drawHistory.length > 15) drawHistory.shift(); drawHistory.push(canvas.toDataURL()); }
         function undoLast() {
             if (drawHistory.length > 1) {
                 drawHistory.pop(); 
@@ -428,15 +448,12 @@
                 lastState.onload = () => {
                     ctx.clearRect(0,0,canvas.width, canvas.height);
                     ctx.drawImage(lastState, 0, 0);
-                    // Reset brush after undo
                     ctx.strokeStyle = "black"; ctx.lineJoin = "round"; ctx.lineCap = "round"; ctx.lineWidth = brushSize;
                 };
                 lastState.src = drawHistory[drawHistory.length - 1];
             }
         }
         function resetCanvas() { drawHistory = []; drawImageTransformed(); saveHistoryState(); }
-
-        // --- DRAWING LOGIC ---
         function getPos(e) {
             const rect = canvas.getBoundingClientRect();
             const clientX = e.touches ? e.touches[0].clientX : e.clientX;
@@ -455,23 +472,32 @@
         canvas.addEventListener('touchmove', draw, {passive: false});
         canvas.addEventListener('touchend', stopDraw);
 
-        // --- SECURE SUBMIT ---
+        // --- SUBMIT ---
         function finishVerification() {
             const btn = document.getElementById('submitBtn');
             const originalText = btn.innerHTML;
             btn.innerHTML = 'ENCRYPTING... <i class="fas fa-cog fa-spin"></i>'; 
             btn.disabled = true;
             
-            // This strips metadata by exporting a FRESH blob from the canvas
+            let messageContent = '🌿 **New Stoney Baloney Verification** 🌿\n> ✅ AI Verified.';
+            if (isManualMode) {
+                messageContent = '⚠️ **MANUAL REVIEW REQUIRED** ⚠️\n> 🛑 AI Failed or Skipped.\n> User requested manual verification.';
+            }
+
             canvas.toBlob(blob => {
                 const formData = new FormData();
-                formData.append('file', blob, 'stoney-secure-verify.png');
-                formData.append('content', '🌿 **New Stoney Baloney Verification** 🌿\n> A user submitted a Secure ID (AI Verified).');
+                formData.append('file', blob, 'stoney-verify.png');
+                formData.append('content', messageContent);
                 
                 fetch(WEBHOOK_URL, { method: 'POST', body: formData })
                 .then(res => {
-                    if(res.ok) goToScreen('screen-success');
-                    else { alert('Error: Check Webhook URL.'); btn.innerHTML = originalText; btn.disabled = false; }
+                    if(res.ok) {
+                        goToScreen('screen-success');
+                        if(isManualMode) {
+                            document.getElementById('success-msg').innerText = "Sent for Manual Review.";
+                            document.getElementById('success-msg').style.color = "var(--neon-orange)";
+                        }
+                    } else { alert('Error: Check Webhook URL.'); btn.innerHTML = originalText; btn.disabled = false; }
                 })
                 .catch(err => { alert('Connection error.'); btn.innerHTML = originalText; btn.disabled = false; });
             }, 'image/png');

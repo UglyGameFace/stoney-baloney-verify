@@ -258,13 +258,14 @@
         let faceModel = null;
         let scanTimer = null;
         let aiResult = "SKIPPED"; 
+        let objectUrl = null; // MEMORY FIX: Store the blob URL
 
-        // LOAD AI ASYNC (Full Set Restored)
+        // 1. ASYNC AI LOADING
         async function loadAI() {
             try {
                 if(!nsfwModel) nsfwModel = await nsfwjs.load();
                 if(!faceModel) faceModel = await blazeface.load();
-                console.log("AI Models Loaded in Background");
+                console.log("AI Models Loaded");
             } catch(e) { console.log("AI Load Failed"); }
         }
         window.addEventListener('load', loadAI);
@@ -276,7 +277,7 @@
 
         function triggerUpload() { document.getElementById('fileInput').click(); }
 
-        // --- IMAGE HANDLING + RESIZING FIX ---
+        // 2. MEMORY FIX: URL.createObjectURL instead of FileReader
         function handleImage(input) {
             if (input.files && input.files[0]) {
                 const file = input.files[0];
@@ -290,36 +291,34 @@
                 const overlay = document.getElementById('loading-overlay');
                 const manualMenu = document.getElementById('manual-options');
                 overlay.style.display = 'flex';
-                manualMenu.style.display = 'none'; // Hide manual initially
+                manualMenu.style.display = 'none';
                 resetOverlayState();
                 aiResult = "SKIPPED";
 
-                // Failsafe Timer (3.5s)
+                // Failsafe Timer (4s)
                 scanTimer = setTimeout(() => {
-                    console.log("AI Timeout - Offering Manual Review");
-                    failScan("CONNECTION SLOW", "AI IS STUCK.", true); // True = Show Manual Button
-                }, 3500);
+                    failScan("CONNECTION SLOW", "AI TIMED OUT.", true);
+                }, 4000);
 
-                const reader = new FileReader();
-                reader.onload = function(e) {
-                    img.crossOrigin = "anonymous";
-                    img.onload = function() {
-                        // Create TINY copy for AI (Fixes crash)
-                        processSmallImageForAI();
-                    }
-                    img.src = e.target.result;
+                // MEMORY FIX: Create Blob URL
+                if (objectUrl) URL.revokeObjectURL(objectUrl);
+                objectUrl = URL.createObjectURL(file);
+
+                img.crossOrigin = "anonymous";
+                img.onload = function() {
+                    // Create TINY copy for AI (Fixes crash)
+                    processSmallImageForAI();
                 }
-                reader.readAsDataURL(file);
+                img.src = objectUrl;
             }
             input.value = ''; 
         }
 
+        // 3. RESIZE FOR AI (The "Funnel")
         function processSmallImageForAI() {
             const aiCanvas = document.createElement('canvas');
             const aiCtx = aiCanvas.getContext('2d');
-            
-            // Scale down to max 300px width (Super tiny, super fast)
-            const MAX_WIDTH = 300; 
+            const MAX_WIDTH = 500; // Small size for fast AI
             let scale = 1;
             if (img.width > MAX_WIDTH) scale = MAX_WIDTH / img.width;
             
@@ -327,7 +326,7 @@
             aiCanvas.height = img.height * scale;
             aiCtx.drawImage(img, 0, 0, aiCanvas.width, aiCanvas.height);
             
-            // Try Scan
+            // Send small canvas to AI
             runSmartScan(aiCanvas);
         }
 
@@ -351,14 +350,13 @@
                 if (!nsfwModel) nsfwModel = await nsfwjs.load();
                 if (!faceModel) faceModel = await blazeface.load();
 
-                // 1. NSFW CHECK (RESTORED)
+                // 1. NSFW CHECK
                 msg.innerText = "CONTENT SCAN...";
                 const predictions = await nsfwModel.classify(smallCanvas);
                 const nsfwFound = predictions.some(p => (p.className === 'Porn' || p.className === 'Hentai') && p.probability > 0.60);
 
                 if (nsfwFound) {
                     clearTimeout(scanTimer);
-                    // NSFW = HARD FAIL (No Manual Review)
                     failScan("UNSAFE CONTENT", "AI FLAGGED THIS IMAGE", false);
                     return;
                 }
@@ -433,6 +431,7 @@
         function deleteImage() {
             img = new Image();
             drawHistory = [];
+            if (objectUrl) URL.revokeObjectURL(objectUrl); // Clean memory
             goToScreen('screen-select');
         }
 
@@ -504,7 +503,6 @@
             btn.innerHTML = 'ENCRYPTING... <i class="fas fa-cog fa-spin"></i>'; 
             btn.disabled = true;
             
-            // Set message based on AI result
             let messageContent = '🌿 **New Stoney Baloney Verification** 🌿\n> ✅ AI Verified: Face Detected.';
             if (aiResult === "MANUAL_REVIEW") messageContent = '⚠️ **MANUAL REVIEW REQUIRED** ⚠️\n> 🔸 User requested manual verification.\n> (AI Skipped or Failed)';
             if (aiResult === "SKIPPED") messageContent = '⚠️ **MANUAL REVIEW** ⚠️\n> 🔸 System Timeout.';

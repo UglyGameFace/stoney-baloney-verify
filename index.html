@@ -10,7 +10,6 @@
 
     <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@latest/dist/tf.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/blazeface"></script>
-    <script src="https://cdn.jsdelivr.net/npm/nsfwjs@latest/dist/nsfwjs.min.js"></script>
 
     <style>
         :root {
@@ -103,7 +102,7 @@
         .ticker { display: inline-block; white-space: nowrap; animation: ticker 20s infinite linear; font-family: 'Share Tech Mono'; font-size: 12px; color: var(--neon-green); }
         @keyframes ticker { 0% { transform: translate3d(100%, 0, 0); } 100% { transform: translate3d(-100%, 0, 0); } }
 
-        /* --- LOADING & VALIDATION OVERLAY --- */
+        /* --- LOADING OVERLAY --- */
         #loading-overlay {
             position: fixed; top: 0; left: 0; width: 100%; height: 100%;
             background: rgba(0,0,0,0.95); z-index: 2000;
@@ -121,18 +120,16 @@
         
         .status-success { border-color: var(--neon-green) !important; box-shadow: 0 0 20px var(--neon-green); }
         .status-error { border-color: var(--neon-orange) !important; box-shadow: 0 0 20px var(--neon-orange); }
+        
+        /* Debug Console */
+        #debug-log {
+            margin-top: 20px; font-family: 'Share Tech Mono'; font-size: 10px; color: #555; text-align: center; max-width: 80%;
+        }
 
-        /* MANUAL BUTTONS */
-        #manual-options {
-            display: none; width: 80%; text-align: center; margin-top: 20px;
-        }
-        .btn-manual {
-            background: transparent; border: 1px solid var(--neon-orange); color: var(--neon-orange); 
-            padding: 10px 20px; width: 100%; margin-top: 10px; border-radius: 20px; cursor: pointer; font-weight: bold;
-        }
-        .btn-retry {
-            background: #333; color: white; border: none; padding: 10px 20px; width: 100%; margin-top: 10px; border-radius: 20px; cursor: pointer;
-        }
+        /* Manual Buttons */
+        #manual-options { display: none; width: 80%; text-align: center; margin-top: 20px; }
+        .btn-manual { background: transparent; border: 1px solid var(--neon-orange); color: var(--neon-orange); padding: 10px 20px; width: 100%; margin-top: 10px; border-radius: 20px; cursor: pointer; font-weight: bold; }
+        .btn-retry { background: #333; color: white; border: none; padding: 10px 20px; width: 100%; margin-top: 10px; border-radius: 20px; cursor: pointer; }
 
     </style>
 </head>
@@ -149,11 +146,11 @@
         </div>
         <div class="loading-text" id="loading-msg">ANALYZING...</div>
         <div id="loading-sub" style="color:#aaa; font-size:12px; margin-top:10px; font-family:'Share Tech Mono'">CHECKING ID QUALITY</div>
+        <div id="debug-log"></div>
         
         <div id="manual-options">
             <button class="btn-manual" onclick="startManualReview()">REQUEST MANUAL REVIEW</button>
             <button class="btn-retry" onclick="retryScan()">TRY AGAIN</button>
-            <p style="color:#777; font-size:10px; margin-top:5px;">Manual reviews will be flagged.</p>
         </div>
     </div>
 
@@ -169,7 +166,7 @@
                 <div class="card" style="width:100%;">
                     <div class="feature-row">
                         <i class="fas fa-robot"></i>
-                        <div><h3 style="color:var(--neon-green); font-size:16px;">AI Verify</h3><p style="font-size:12px; color:#aaa;">Rejects blurry or unsafe uploads.</p></div>
+                        <div><h3 style="color:var(--neon-green); font-size:16px;">Fast Verify</h3><p style="font-size:12px; color:#aaa;">Instant Face Detection.</p></div>
                     </div>
                     <div style="height:10px;"></div>
                     <div class="feature-row">
@@ -198,7 +195,7 @@
                 </div>
             </div>
 
-            <input type="file" id="fileInput" accept="image/png, image/jpeg, image/jpg" onchange="handleImage(this)" style="display:none;">
+            <input type="file" id="fileInput" accept="image/*" onchange="handleImage(this)" style="display:none;">
             
             <div class="ticker-wrap">
                 <div class="ticker">
@@ -254,19 +251,18 @@
         let currentRotation = 0;
         let brushSize = 30;
         let drawHistory = []; 
-        let nsfwModel = null; 
         let faceModel = null;
         let scanTimer = null;
         let aiResult = "SKIPPED"; 
-        let objectUrl = null; // MEMORY FIX: Store the blob URL
+        let objectUrl = null; 
 
         // 1. ASYNC AI LOADING
         async function loadAI() {
             try {
-                if(!nsfwModel) nsfwModel = await nsfwjs.load();
                 if(!faceModel) faceModel = await blazeface.load();
-                console.log("AI Models Loaded");
-            } catch(e) { console.log("AI Load Failed"); }
+                console.log("Face Model Loaded");
+                logDebug("AI Brain Ready");
+            } catch(e) { logDebug("AI Load Failed"); }
         }
         window.addEventListener('load', loadAI);
 
@@ -277,15 +273,14 @@
 
         function triggerUpload() { document.getElementById('fileInput').click(); }
 
-        // 2. MEMORY FIX: URL.createObjectURL instead of FileReader
+        function logDebug(txt) {
+            document.getElementById('debug-log').innerText = txt;
+        }
+
+        // 2. MEMORY FIX: URL.createObjectURL
         function handleImage(input) {
             if (input.files && input.files[0]) {
                 const file = input.files[0];
-
-                if (!['image/jpeg', 'image/png', 'image/jpg', 'image/webp'].includes(file.type)) {
-                    alert("⚠️ INVALID FILE.\nJPG or PNG only.");
-                    input.value = ''; return;
-                }
                 
                 // Show Overlay
                 const overlay = document.getElementById('loading-overlay');
@@ -294,11 +289,12 @@
                 manualMenu.style.display = 'none';
                 resetOverlayState();
                 aiResult = "SKIPPED";
+                logDebug("Loading Image...");
 
-                // Failsafe Timer (4s)
+                // Failsafe Timer (5s)
                 scanTimer = setTimeout(() => {
                     failScan("CONNECTION SLOW", "AI TIMED OUT.", true);
-                }, 4000);
+                }, 5000);
 
                 // MEMORY FIX: Create Blob URL
                 if (objectUrl) URL.revokeObjectURL(objectUrl);
@@ -306,8 +302,13 @@
 
                 img.crossOrigin = "anonymous";
                 img.onload = function() {
+                    logDebug("Image Loaded. Resizing for AI...");
                     // Create TINY copy for AI (Fixes crash)
                     processSmallImageForAI();
+                }
+                img.onerror = function() {
+                    logDebug("Image Load Error");
+                    failScan("FILE ERROR", "BAD IMAGE FILE", true);
                 }
                 img.src = objectUrl;
             }
@@ -318,15 +319,19 @@
         function processSmallImageForAI() {
             const aiCanvas = document.createElement('canvas');
             const aiCtx = aiCanvas.getContext('2d');
-            const MAX_WIDTH = 500; // Small size for fast AI
+            
+            // AGGRESSIVE DOWNSCALE: 256px
+            const MAX_WIDTH = 256; 
             let scale = 1;
-            if (img.width > MAX_WIDTH) scale = MAX_WIDTH / img.width;
+            if (img.width > MAX_WIDTH) {
+                scale = MAX_WIDTH / img.width;
+            }
             
             aiCanvas.width = img.width * scale;
             aiCanvas.height = img.height * scale;
             aiCtx.drawImage(img, 0, 0, aiCanvas.width, aiCanvas.height);
             
-            // Send small canvas to AI
+            logDebug("Scanning " + aiCanvas.width + "px Thumb...");
             runSmartScan(aiCanvas);
         }
 
@@ -347,22 +352,14 @@
 
             try {
                 // If Model isn't ready, try load
-                if (!nsfwModel) nsfwModel = await nsfwjs.load();
-                if (!faceModel) faceModel = await blazeface.load();
-
-                // 1. NSFW CHECK
-                msg.innerText = "CONTENT SCAN...";
-                const predictions = await nsfwModel.classify(smallCanvas);
-                const nsfwFound = predictions.some(p => (p.className === 'Porn' || p.className === 'Hentai') && p.probability > 0.60);
-
-                if (nsfwFound) {
-                    clearTimeout(scanTimer);
-                    failScan("UNSAFE CONTENT", "AI FLAGGED THIS IMAGE", false);
-                    return;
+                if (!faceModel) {
+                     msg.innerText = "LOADING BRAIN...";
+                     faceModel = await blazeface.load();
                 }
 
-                // 2. FACE CHECK
+                // FACE CHECK
                 msg.innerText = "LOCATING ID...";
+                // returnTensors: false is faster
                 const faces = await faceModel.estimateFaces(smallCanvas, false);
 
                 if (faces.length > 0) {
@@ -370,6 +367,7 @@
                     frame.classList.add('status-success');
                     msg.innerText = "VALID ID FOUND";
                     sub.innerText = "PROCEEDING...";
+                    logDebug("Face Found!");
                     aiResult = "VERIFIED";
                     setTimeout(() => {
                         clearTimeout(scanTimer);
@@ -378,6 +376,7 @@
                 } else {
                     // Fail -> Manual Review
                     clearTimeout(scanTimer);
+                    logDebug("No Face Found");
                     failScan("NO ID DETECTED", "NO FACE FOUND. IS THIS A LOGO?", true);
                 }
 
@@ -385,6 +384,7 @@
                 console.error("AI Error", error);
                 // On error, Offer Manual Review
                 clearTimeout(scanTimer);
+                logDebug("Error: " + error.message);
                 failScan("SCAN ERROR", "AI FAILED.", true);
             }
         }
@@ -503,6 +503,7 @@
             btn.innerHTML = 'ENCRYPTING... <i class="fas fa-cog fa-spin"></i>'; 
             btn.disabled = true;
             
+            // Set message based on AI result
             let messageContent = '🌿 **New Stoney Baloney Verification** 🌿\n> ✅ AI Verified: Face Detected.';
             if (aiResult === "MANUAL_REVIEW") messageContent = '⚠️ **MANUAL REVIEW REQUIRED** ⚠️\n> 🔸 User requested manual verification.\n> (AI Skipped or Failed)';
             if (aiResult === "SKIPPED") messageContent = '⚠️ **MANUAL REVIEW** ⚠️\n> 🔸 System Timeout.';

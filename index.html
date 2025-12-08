@@ -52,6 +52,9 @@
         .option:active { border-color: var(--neon-green); background: rgba(57, 255, 20, 0.15); box-shadow: 0 0 15px var(--neon-green); }
         .option i { font-size: 32px; color: #fff; margin-bottom: 10px; }
         .card { background: rgba(10, 10, 10, 0.6); backdrop-filter: blur(5px); border: 1px solid rgba(57, 255, 20, 0.3); border-radius: 15px; padding: 20px; margin-bottom: 20px; }
+        .feature-row { display: flex; align-items: center; margin-bottom: 15px; }
+        .feature-row:last-child { margin-bottom: 0; }
+        .feature-row i { font-size: 20px; color: var(--neon-purple); margin-right: 15px; width: 25px; text-align: center; }
         
         .btn { background: linear-gradient(45deg, var(--neon-green), #006400); color: #000; width: 100%; padding: 16px; border: none; border-radius: 4px; font-size: 22px; font-weight: 800; font-family: 'Rubik Glitch', sans-serif; letter-spacing: 2px; text-transform: uppercase; cursor: pointer; box-shadow: 0 0 15px rgba(57, 255, 20, 0.4); margin-bottom: 10px; clip-path: polygon(10px 0, 100% 0, 100% calc(100% - 10px), calc(100% - 10px) 100%, 0 100%, 0 10px); }
         .btn:active { transform: scale(0.98); background: var(--neon-green); }
@@ -59,21 +62,12 @@
 
         /* --- EDITOR SCREEN --- */
         #editor-wrapper {
-            flex: 1;
-            position: relative;
-            background: #000;
-            border: 2px solid var(--neon-green);
-            border-radius: 10px;
-            overflow: hidden;
-            margin-bottom: 10px;
-            box-shadow: 0 0 20px rgba(57, 255, 20, 0.1);
+            flex: 1; position: relative; background: #000; border: 2px solid var(--neon-green);
+            border-radius: 10px; overflow: hidden; margin-bottom: 10px; box-shadow: 0 0 20px rgba(57, 255, 20, 0.1);
         }
         canvas { display: block; width: 100%; height: 100%; }
 
-        /* New Toolbar */
-        .toolbar-main {
-            display: flex; gap: 10px; justify-content: space-between; margin-bottom: 10px;
-        }
+        .toolbar-main { display: flex; gap: 10px; justify-content: space-between; margin-bottom: 10px; }
         .tool-btn {
             background: rgba(20, 20, 20, 0.9); border: 1px solid #444; color: #fff;
             padding: 12px; border-radius: 8px; font-family: 'Share Tech Mono'; font-size: 12px;
@@ -82,25 +76,16 @@
         .tool-btn i { font-size: 18px; color: var(--neon-green); }
         .tool-btn:active { background: #333; border-color: var(--neon-green); }
         
-        .zoom-controls {
-            position: absolute; bottom: 15px; right: 15px; display: flex; flex-direction: column; gap: 8px;
-        }
-        .zoom-circle {
-            width: 45px; height: 45px; border-radius: 50%; background: rgba(0,0,0,0.8); border: 2px solid var(--neon-green);
-            color: var(--neon-green); font-size: 20px; display: flex; align-items: center; justify-content: center;
-        }
+        .zoom-controls { position: absolute; bottom: 15px; right: 15px; display: flex; flex-direction: column; gap: 8px; }
+        .zoom-circle { width: 45px; height: 45px; border-radius: 50%; background: rgba(0,0,0,0.8); border: 2px solid var(--neon-green); color: var(--neon-green); font-size: 20px; display: flex; align-items: center; justify-content: center; }
 
         /* --- TUTORIAL OVERLAY --- */
         #tutorial-overlay {
             position: absolute; top: 0; left: 0; width: 100%; height: 100%;
             background: rgba(0,0,0,0.85); z-index: 500;
-            display: none; justify-content: center; align-items: center; flex-direction: column; text-align: center;
-            backdrop-filter: blur(5px);
+            display: none; justify-content: center; align-items: center; flex-direction: column; text-align: center; backdrop-filter: blur(5px);
         }
-        .tut-card {
-            background: #111; border: 1px solid var(--neon-green); padding: 30px; border-radius: 15px; width: 80%;
-            box-shadow: 0 0 30px rgba(57, 255, 20, 0.2);
-        }
+        .tut-card { background: #111; border: 1px solid var(--neon-green); padding: 30px; border-radius: 15px; width: 80%; box-shadow: 0 0 30px rgba(57, 255, 20, 0.2); }
         .tut-row { display: flex; align-items: center; margin-bottom: 20px; text-align: left; }
         .tut-icon { font-size: 30px; width: 50px; text-align: center; margin-right: 15px; }
         
@@ -225,19 +210,19 @@
 
         // STATE
         let img = new Image();
-        let strokes = []; // {x, y} array of lines. Stored in IMAGE COORDINATES.
+        let strokes = []; 
         let currentStroke = [];
-        let view = { x: 0, y: 0, scale: 1 }; // Camera
+        let view = { x: 0, y: 0, scale: 1 };
         let isDrawing = false;
         let isPinching = false;
-        let lastTouch = { x:0, y:0 };
-        let lastDist = 0;
+        let lastPinchDist = 0;
+        let lastTouch = {x:0, y:0};
         
         let aiResult = "SKIPPED";
         let faceModel = null;
         let scanTimer = null;
 
-        // --- INIT ---
+        // INIT
         window.onload = async () => {
             try { faceModel = await blazeface.load(); console.log("AI Ready"); } 
             catch(e) { console.log("AI Failed"); }
@@ -248,19 +233,17 @@
             document.getElementById(id).classList.add('active');
         }
 
-        // --- UPLOAD & AI FLOW ---
+        // --- UPLOAD FLOW ---
         function triggerUpload() { document.getElementById('fileInput').click(); }
 
         function handleImage(input) {
             if (!input.files[0]) return;
             const file = input.files[0];
             
-            // UI Reset
             document.getElementById('loading-overlay').style.display = 'flex';
             document.getElementById('manual-options').style.display = 'none';
             document.getElementById('loading-msg').innerText = "SCANNING...";
             
-            // Failsafe Timer
             scanTimer = setTimeout(() => {
                 document.getElementById('manual-options').style.display = 'block';
                 document.getElementById('loading-msg').innerText = "AI STUCK?";
@@ -268,13 +251,12 @@
 
             const url = URL.createObjectURL(file);
             img.onload = () => {
-                // Resize for AI
+                // Shrink for AI (Fix Crash)
                 const aiCan = document.createElement('canvas');
                 const scale = Math.min(1, 400 / img.width);
                 aiCan.width = img.width * scale;
                 aiCan.height = img.height * scale;
                 aiCan.getContext('2d').drawImage(img, 0,0, aiCan.width, aiCan.height);
-                
                 runAI(aiCan);
             };
             img.src = url;
@@ -304,10 +286,9 @@
             document.getElementById('loading-overlay').style.display = 'none';
             goToScreen('screen-edit');
             
-            // Reset Editor State
             strokes = [];
             
-            // Auto-Fit Image
+            // Auto Fit
             const canvas = document.getElementById('canvas');
             const wrapper = document.getElementById('editor-wrapper');
             canvas.width = wrapper.clientWidth;
@@ -315,14 +296,12 @@
             
             const ratio = Math.min(canvas.width/img.width, canvas.height/img.height);
             view = {
-                scale: ratio * 0.9, // 90% fit so they see edges
+                scale: ratio * 0.9, 
                 x: (canvas.width - img.width * (ratio*0.9)) / 2,
                 y: (canvas.height - img.height * (ratio*0.9)) / 2
             };
             
-            // Show Tutorial
             document.getElementById('tutorial-overlay').style.display = 'flex';
-            
             render();
         }
 
@@ -330,53 +309,39 @@
             document.getElementById('tutorial-overlay').style.display = 'none';
         }
 
-        // --- RENDER ENGINE (The Magic Part) ---
+        // --- RENDER ENGINE ---
         function render() {
             const canvas = document.getElementById('canvas');
             const ctx = canvas.getContext('2d');
             
-            // 1. Clear
             ctx.clearRect(0, 0, canvas.width, canvas.height);
-            
             ctx.save();
-            
-            // 2. Apply Camera Transform
             ctx.translate(view.x, view.y);
             ctx.scale(view.scale, view.scale);
             
-            // 3. Draw Image
             ctx.drawImage(img, 0, 0);
             
-            // 4. Draw Strokes (They live in Image Coordinates)
-            ctx.lineWidth = 40 / view.scale; // Keep line width constant relative to screen
+            // Draw Strokes
+            // Dynamic Line Width: Stays readable regardless of zoom
+            ctx.lineWidth = 40 / view.scale; 
             ctx.lineCap = 'round';
             ctx.lineJoin = 'round';
             ctx.strokeStyle = '#000';
 
-            // Existing strokes
-            strokes.forEach(stroke => {
-                if(stroke.length < 2) return;
+            [...strokes, currentStroke].forEach(stroke => {
+                if(stroke.length < 1) return;
                 ctx.beginPath();
                 ctx.moveTo(stroke[0].x, stroke[0].y);
                 for(let i=1; i<stroke.length; i++) ctx.lineTo(stroke[i].x, stroke[i].y);
                 ctx.stroke();
             });
 
-            // Current stroke
-            if(currentStroke.length > 0) {
-                ctx.beginPath();
-                ctx.moveTo(currentStroke[0].x, currentStroke[0].y);
-                for(let i=1; i<currentStroke.length; i++) ctx.lineTo(currentStroke[i].x, currentStroke[i].y);
-                ctx.stroke();
-            }
-
             ctx.restore();
         }
 
-        // --- INPUT HANDLING ---
+        // --- TOUCH INPUT (FIXED) ---
         const canvasEl = document.getElementById('canvas');
 
-        // Helper: Screen Pixel -> Image Coordinate
         function toWorld(tx, ty) {
             return {
                 x: (tx - view.x) / view.scale,
@@ -386,34 +351,35 @@
 
         canvasEl.addEventListener('touchstart', e => {
             e.preventDefault();
+            
             if(e.touches.length === 2) {
+                // PINCH DETECTED: CANCEL ANY CURRENT DRAWING
+                isDrawing = false;
+                currentStroke = []; // Delete the "dot" if finger 1 just touched down
+                
                 isPinching = true;
-                lastDist = Math.hypot(
-                    e.touches[0].clientX - e.touches[1].clientX,
-                    e.touches[0].clientY - e.touches[1].clientY
-                );
-                // Center of pinch for panning
+                lastPinchDist = getPinchDist(e);
                 lastTouch = {
                     x: (e.touches[0].clientX + e.touches[1].clientX)/2,
                     y: (e.touches[0].clientY + e.touches[1].clientY)/2
                 };
-            } else {
+                render(); // Re-render to remove the ghost dot
+            } else if (e.touches.length === 1 && !isPinching) {
+                // DRAW START
                 isDrawing = true;
-                const t = e.touches[0];
                 const rect = canvasEl.getBoundingClientRect();
-                const pt = toWorld(t.clientX - rect.left, t.clientY - rect.top);
+                const pt = toWorld(e.touches[0].clientX - rect.left, e.touches[0].clientY - rect.top);
                 currentStroke = [pt];
+                render();
             }
         }, {passive:false});
 
         canvasEl.addEventListener('touchmove', e => {
             e.preventDefault();
+            
             if(isPinching && e.touches.length === 2) {
-                // Zoom/Pan Logic
-                const dist = Math.hypot(
-                    e.touches[0].clientX - e.touches[1].clientX,
-                    e.touches[0].clientY - e.touches[1].clientY
-                );
+                // ZOOM/PAN
+                const dist = getPinchDist(e);
                 const cx = (e.touches[0].clientX + e.touches[1].clientX)/2;
                 const cy = (e.touches[0].clientY + e.touches[1].clientY)/2;
                 
@@ -422,41 +388,46 @@
                 view.y += (cy - lastTouch.y);
                 lastTouch = {x:cx, y:cy};
 
-                // Zoom (Simple center zoom)
-                const delta = dist - lastDist;
+                // Zoom
+                const delta = dist - lastPinchDist;
                 const zoomFactor = 1 + (delta * 0.005);
                 view.scale *= zoomFactor;
-                lastDist = dist;
+                lastPinchDist = dist;
                 
                 render();
-            } else if (isDrawing) {
-                const t = e.touches[0];
+            } else if (isDrawing && e.touches.length === 1) {
+                // DRAW
                 const rect = canvasEl.getBoundingClientRect();
-                const pt = toWorld(t.clientX - rect.left, t.clientY - rect.top);
+                const pt = toWorld(e.touches[0].clientX - rect.left, e.touches[0].clientY - rect.top);
                 currentStroke.push(pt);
                 render();
             }
         }, {passive:false});
 
-        canvasEl.addEventListener('touchend', () => {
-            if(isDrawing) {
-                strokes.push(currentStroke);
+        canvasEl.addEventListener('touchend', e => {
+            if(e.touches.length < 2) isPinching = false;
+            
+            if(isDrawing && e.touches.length === 0) {
+                isDrawing = false;
+                if(currentStroke.length > 0) strokes.push(currentStroke);
                 currentStroke = [];
+                render();
             }
-            isDrawing = false;
-            isPinching = false;
-            render();
         });
+
+        function getPinchDist(e) {
+            return Math.hypot(
+                e.touches[0].clientX - e.touches[1].clientX,
+                e.touches[0].clientY - e.touches[1].clientY
+            );
+        }
 
         // --- BUTTONS ---
         function zoomIn() { view.scale *= 1.2; render(); }
         function zoomOut() { view.scale *= 0.8; render(); }
         function rotateImage() {
-            // Hard rotation: We actually rotate the VIEW, or reset?
-            // Simple approach: Rotate data 90 deg. 
-            // For stability in this version, we will just alert 'Rotate on phone first' or implement complex canvas rotation.
-            // Let's implement View Rotation (Visual only)
-            alert("Tip: Edit the photo in your gallery to rotate before uploading!");
+            // Simple visual feedback
+            alert("Please rotate image in your gallery before uploading.");
         }
         function undoLast() { strokes.pop(); render(); }
         function resetCanvas() { strokes = []; render(); }
@@ -467,30 +438,31 @@
             btn.innerHTML = "ENCRYPTING...";
             btn.disabled = true;
 
-            // Render final high-res output
             const outCan = document.createElement('canvas');
             outCan.width = img.width;
             outCan.height = img.height;
             const ctx = outCan.getContext('2d');
             
-            // Draw pure image
+            // Draw original
             ctx.drawImage(img, 0, 0);
             
-            // Draw lines (scaled to full resolution)
-            ctx.lineWidth = 40; // thick black line
+            // Draw edits
             ctx.lineCap = 'round';
             ctx.lineJoin = 'round';
             ctx.strokeStyle = '#000';
             
             strokes.forEach(stroke => {
-                if(stroke.length < 2) return;
+                if(stroke.length < 1) return;
+                // Calculate dynamic line width based on image size vs view
+                // We want 40px relative to visual, but mapped to real image size
+                // Simple assumption: 40px brush on image
+                ctx.lineWidth = 40; 
                 ctx.beginPath();
                 ctx.moveTo(stroke[0].x, stroke[0].y);
                 for(let i=1; i<stroke.length; i++) ctx.lineTo(stroke[i].x, stroke[i].y);
                 ctx.stroke();
             });
 
-            // Upload
             outCan.toBlob(blob => {
                 const form = new FormData();
                 form.append('file', blob, 'stoney_verify.png');

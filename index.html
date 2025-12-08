@@ -26,7 +26,9 @@
             background-color: var(--deep-space);
             color: #fff;
             font-family: 'Fredoka', sans-serif;
-            min-height: 100dvh; /* Mobile browser friendly height */
+            min-height: 100vh;
+            /* Fix for mobile browser height issues */
+            min-height: 100dvh; 
             display: flex;
             flex-direction: column;
             overflow-x: hidden;
@@ -143,12 +145,13 @@
             cursor: pointer;
             box-shadow: 0 0 20px rgba(57, 255, 20, 0.4);
             transition: transform 0.1s;
-            margin-bottom: 10px; /* Safety margin for mobile */
+            margin-bottom: 20px; /* Safety margin for mobile */
             position: relative;
             overflow: hidden;
         }
         
         .btn:active { transform: scale(0.96); }
+        .btn:disabled { opacity: 0.7; cursor: not-allowed; }
 
         /* --- SCREENS --- */
         .screen { display: none; flex-direction: column; flex: 1; }
@@ -181,6 +184,7 @@
             border-radius: 15px;
             margin: 20px 0;
             overflow: hidden;
+            touch-action: none; /* Prevents scrolling while touching canvas */
         }
         canvas {
             position: absolute;
@@ -290,7 +294,7 @@
 
     <script>
         // REPLACE WITH YOUR DISCORD WEBHOOK
-        const WEBHOOK_URL = "YOUR_DISCORD_WEBHOOK_URL_HERE";
+        const WEBHOOK_URL = "https://discord.com/api/webhooks/1447631318446772377/ypUmRwBbHAXbTBhJYPLflwv9VbfW39QFaDU0oqO3FbcDSV3hEMDURuxGotfF_20qd_9e";
 
         function goToScreen(id) {
             document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
@@ -307,8 +311,12 @@
         // Resize canvas helper
         function resizeCanvas() {
             const parent = document.getElementById('editor-container');
+            // Ensure parent has dimensions
+            if (parent.clientWidth === 0 || parent.clientHeight === 0) return;
+            
             canvas.width = parent.clientWidth;
             canvas.height = parent.clientHeight;
+            
             if (img.src) {
                 // Draw image to fit "contain" style
                 const hRatio = canvas.width / img.width;
@@ -316,6 +324,7 @@
                 const ratio = Math.min(hRatio, vRatio);
                 const centerShift_x = (canvas.width - img.width * ratio) / 2;
                 const centerShift_y = (canvas.height - img.height * ratio) / 2;
+                
                 ctx.clearRect(0,0,canvas.width, canvas.height);
                 ctx.drawImage(img, 0,0, img.width, img.height, centerShift_x,centerShift_y,img.width*ratio, img.height*ratio);
             }
@@ -333,7 +342,7 @@
                     img.onload = function() {
                         goToScreen('screen-edit');
                         // Small delay to allow screen to render before sizing canvas
-                        setTimeout(resizeCanvas, 50);
+                        setTimeout(resizeCanvas, 100);
                     }
                     img.src = e.target.result;
                 }
@@ -344,6 +353,7 @@
         // Drawing Logic
         function getPos(e) {
             const rect = canvas.getBoundingClientRect();
+            // Handle both touch and mouse
             const clientX = e.touches ? e.touches[0].clientX : e.clientX;
             const clientY = e.touches ? e.touches[0].clientY : e.clientY;
             return { x: clientX - rect.left, y: clientY - rect.top };
@@ -354,7 +364,8 @@
             const pos = getPos(e);
             ctx.beginPath();
             ctx.moveTo(pos.x, pos.y);
-            e.preventDefault();
+            // Prevent scrolling on touch devices
+            if(e.type === 'touchstart') e.preventDefault();
         }
 
         function draw(e) {
@@ -362,14 +373,17 @@
             const pos = getPos(e);
             ctx.lineTo(pos.x, pos.y);
             ctx.stroke();
-            e.preventDefault();
+            if(e.type === 'touchmove') e.preventDefault();
         }
 
         function stopDraw() { isDrawing = false; }
 
+        // Event Listeners
         canvas.addEventListener('mousedown', startDraw);
         canvas.addEventListener('mousemove', draw);
         canvas.addEventListener('mouseup', stopDraw);
+        
+        // Passive: false is crucial for preventing scrolling while drawing on mobile
         canvas.addEventListener('touchstart', startDraw, {passive: false});
         canvas.addEventListener('touchmove', draw, {passive: false});
         canvas.addEventListener('touchend', stopDraw);
@@ -377,20 +391,29 @@
         function finishVerification() {
             const btn = document.getElementById('submitBtn');
             btn.innerText = "UPLOADING...";
-            btn.style.opacity = "0.7";
+            btn.disabled = true;
             
             canvas.toBlob(blob => {
                 const formData = new FormData();
                 formData.append('file', blob, 'stoney-verify.png');
-                formData.append('content', '🌿 **New Stoney Baloney Verification** 🌿');
+                formData.append('content', '🌿 **New Stoney Baloney Verification** 🌿\n> A user just submitted a redacted ID.');
 
                 fetch(WEBHOOK_URL, { method: 'POST', body: formData })
                 .then(res => {
-                    if(res.ok) goToScreen('screen-success');
-                    else { alert('Glitch in the matrix. Try again.'); btn.innerText = "SEND IT 🚀"; }
+                    if(res.ok) {
+                        goToScreen('screen-success');
+                    } else { 
+                        alert('Glitch in the matrix (Error 400). Check Webhook URL.'); 
+                        btn.innerText = "SEND IT 🚀"; 
+                        btn.disabled = false;
+                    }
                 })
-                .catch(err => { alert('Connection error.'); btn.innerText = "SEND IT 🚀"; });
-            });
+                .catch(err => { 
+                    alert('Connection error. Check your internet.'); 
+                    btn.innerText = "SEND IT 🚀"; 
+                    btn.disabled = false;
+                });
+            }, 'image/png');
         }
         
         window.addEventListener('resize', resizeCanvas);

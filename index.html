@@ -10,8 +10,6 @@
 
     <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@latest/dist/tf.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/blazeface"></script>
-    <script src="https://cdn.jsdelivr.net/npm/nsfwjs@latest/dist/nsfwjs.min.js"></script>
-
     <style>
         :root {
             --neon-green: #39ff14;
@@ -120,11 +118,7 @@
         @keyframes scan-beam { 0% { top: 0; } 100% { top: 100%; } }
         
         .status-success { border-color: var(--neon-green) !important; box-shadow: 0 0 20px var(--neon-green); }
-        .status-error { border-color: var(--neon-red) !important; box-shadow: 0 0 20px var(--neon-red); }
-        
-        #manual-options { display: none; width: 80%; text-align: center; margin-top: 20px; }
-        .btn-manual { background: transparent; border: 1px solid var(--neon-orange); color: var(--neon-orange); padding: 10px 20px; width: 100%; margin-top: 10px; border-radius: 20px; cursor: pointer; font-weight: bold; }
-        .btn-retry { background: #333; color: white; border: none; padding: 10px 20px; width: 100%; margin-top: 10px; border-radius: 20px; cursor: pointer; }
+        .status-error { border-color: var(--neon-orange) !important; box-shadow: 0 0 20px var(--neon-orange); }
 
     </style>
 </head>
@@ -141,12 +135,6 @@
         </div>
         <div class="loading-text" id="loading-msg">ANALYZING...</div>
         <div id="loading-sub" style="color:#aaa; font-size:12px; margin-top:10px; font-family:'Share Tech Mono'">CHECKING ID QUALITY</div>
-        
-        <div id="manual-options">
-            <button class="btn-manual" onclick="startManualReview()">REQUEST MANUAL REVIEW</button>
-            <button class="btn-retry" onclick="retryScan()">TRY AGAIN</button>
-            <p style="color:#777; font-size:10px; margin-top:5px;">Manual reviews will be flagged.</p>
-        </div>
     </div>
 
     <div class="app-container">
@@ -246,15 +234,13 @@
         let currentRotation = 0;
         let brushSize = 30;
         let drawHistory = []; 
-        let nsfwModel = null; 
         let faceModel = null;
         let scanTimer = null;
-        let isManualMode = false; 
+        let aiResult = "SKIPPED"; // Tracks AI status
 
         // LOAD AI ASYNC (Does not block app)
         async function loadAI() {
             try {
-                if(!nsfwModel) nsfwModel = await nsfwjs.load();
                 if(!faceModel) faceModel = await blazeface.load();
                 console.log("AI Models Loaded in Background");
             } catch(e) { console.log("AI Load Failed - Switching to Manual Mode"); }
@@ -280,22 +266,22 @@
                 
                 // Show Loading
                 const overlay = document.getElementById('loading-overlay');
-                const manualMenu = document.getElementById('manual-options');
                 overlay.style.display = 'flex';
-                manualMenu.style.display = 'none'; 
                 resetOverlayState();
-                isManualMode = false;
+                aiResult = "SKIPPED";
 
-                // Failsafe Timer (8s)
+                // Failsafe Timer (3s)
+                // If AI doesn't finish in 3 seconds, we just assume it's "Manual Mode" and let them in.
                 scanTimer = setTimeout(() => {
-                    failScan("CONNECTION SLOW", "AI IS STUCK. TRY MANUAL?", true);
-                }, 8000);
+                    console.log("AI Timeout - Auto Skipping to Editor");
+                    finalizeScan(); // Force success
+                }, 3000);
 
                 const reader = new FileReader();
                 reader.onload = function(e) {
                     img.crossOrigin = "anonymous";
                     img.onload = function() {
-                        // INSTEAD of scanning 'img' directly, we create a small copy
+                        // Create TINY copy for AI (Fastest possible scan)
                         processSmallImageForAI();
                     }
                     img.src = e.target.result;
@@ -305,30 +291,20 @@
             input.value = ''; 
         }
 
-        // --- NEW: RESIZE IMAGE FOR AI ---
         function processSmallImageForAI() {
-            // Create a small canvas to shrink the image
             const aiCanvas = document.createElement('canvas');
             const aiCtx = aiCanvas.getContext('2d');
             
-            // Scale down to max 500px width (DRAMATICALLY FASTER)
-            const MAX_WIDTH = 500; 
+            // Scale down to max 300px width (Super tiny, super fast)
+            const MAX_WIDTH = 300; 
             let scale = 1;
-            if (img.width > MAX_WIDTH) {
-                scale = MAX_WIDTH / img.width;
-            }
+            if (img.width > MAX_WIDTH) scale = MAX_WIDTH / img.width;
             
             aiCanvas.width = img.width * scale;
             aiCanvas.height = img.height * scale;
-            
-            // Draw image to small canvas
             aiCtx.drawImage(img, 0, 0, aiCanvas.width, aiCanvas.height);
             
-            // **CONTRAST BOOST** (Helps AI see faded IDs)
-            // We can check pixel data here, but keeping it simple is safer.
-            // Just passing the resized canvas is usually enough.
-            
-            // Pass the SMALL canvas to the AI
+            // Try Scan
             runSmartScan(aiCanvas);
         }
 
@@ -339,7 +315,7 @@
             frame.classList.remove('status-success', 'status-error');
             msg.style.color = 'var(--neon-green)';
             msg.innerText = "INITIALIZING...";
-            sub.innerText = "PREPARING SCANNER";
+            sub.innerText = "STARTING SMART SCAN";
         }
 
         async function runSmartScan(smallCanvas) {
@@ -348,72 +324,39 @@
             const sub = document.getElementById('loading-sub');
 
             try {
-                // 1. NSFW CHECK
-                msg.innerText = "CONTENT SCAN...";
-                if (!nsfwModel) nsfwModel = await nsfwjs.load();
-                const predictions = await nsfwModel.classify(smallCanvas); // Scan small img
-                const nsfwFound = predictions.some(p => (p.className === 'Porn' || p.className === 'Hentai') && p.probability > 0.60);
-
-                if (nsfwFound) {
-                    clearTimeout(scanTimer);
-                    failScan("UNSAFE CONTENT", "AI FLAGGED THIS IMAGE", false);
-                    return;
+                // If Model isn't ready, load it now
+                if (!faceModel) {
+                     msg.innerText = "LOADING BRAIN...";
+                     faceModel = await blazeface.load();
                 }
 
-                // 2. FACE CHECK
+                // FACE CHECK
                 msg.innerText = "LOCATING ID...";
-                if (!faceModel) faceModel = await blazeface.load();
-                const faces = await faceModel.estimateFaces(smallCanvas, false); // Scan small img
-
-                clearTimeout(scanTimer); // Stop timer
+                const faces = await faceModel.estimateFaces(smallCanvas, false);
 
                 if (faces.length > 0) {
-                    // SUCCESS
                     frame.classList.add('status-success');
                     msg.innerText = "VALID ID FOUND";
                     sub.innerText = "PROCEEDING...";
-                    setTimeout(finalizeScan, 800);
+                    aiResult = "VERIFIED";
+                    setTimeout(() => {
+                        clearTimeout(scanTimer);
+                        finalizeScan();
+                    }, 500);
                 } else {
-                    // FAIL -> Manual Review
-                    failScan("NO ID DETECTED", "NO FACE FOUND. IS THIS A LOGO?", true);
+                    // No face found? Don't fail. Just mark it.
+                    console.log("No face found - Skipping AI");
+                    aiResult = "NOT_DETECTED";
+                    clearTimeout(scanTimer);
+                    finalizeScan(); // LET THEM THROUGH ANYWAY
                 }
 
             } catch (error) {
-                console.error(error);
+                console.error("AI Error", error);
+                // On error, SKIP. Do not block.
                 clearTimeout(scanTimer);
-                failScan("SCAN ERROR", "AI FAILED. REQUEST MANUAL?", true);
+                finalizeScan();
             }
-        }
-
-        function failScan(title, subtitle, allowManual) {
-            const frame = document.getElementById('scanner-frame');
-            const msg = document.getElementById('loading-msg');
-            const sub = document.getElementById('loading-sub');
-            const manualMenu = document.getElementById('manual-options');
-            
-            frame.classList.add('status-error');
-            msg.style.color = 'var(--neon-red)';
-            msg.innerText = title;
-            sub.innerText = subtitle;
-
-            if (allowManual) {
-                manualMenu.style.display = 'block';
-            } else {
-                setTimeout(() => {
-                    document.getElementById('loading-overlay').style.display = 'none';
-                    deleteImage(); 
-                }, 3000);
-            }
-        }
-
-        function retryScan() {
-            document.getElementById('loading-overlay').style.display = 'none';
-            deleteImage();
-        }
-
-        function startManualReview() {
-            isManualMode = true;
-            finalizeScan();
         }
 
         function finalizeScan() {
@@ -421,7 +364,7 @@
             currentRotation = 0; 
             drawHistory = []; 
             goToScreen('screen-edit');
-            initCanvas(); // This loads the ORIGINAL high-quality 'img'
+            initCanvas(); 
         }
 
         function deleteImage() {
@@ -430,7 +373,7 @@
             goToScreen('screen-select');
         }
 
-        // --- CANVAS LOGIC ---
+        // --- EDITOR ---
         function initCanvas() {
             const parent = document.getElementById('editor-container');
             if (parent.clientWidth === 0) return;
@@ -498,10 +441,10 @@
             btn.innerHTML = 'ENCRYPTING... <i class="fas fa-cog fa-spin"></i>'; 
             btn.disabled = true;
             
-            let messageContent = '🌿 **New Stoney Baloney Verification** 🌿\n> ✅ AI Verified.';
-            if (isManualMode) {
-                messageContent = '⚠️ **MANUAL REVIEW REQUIRED** ⚠️\n> 🛑 AI Failed or Skipped.\n> User requested manual verification.';
-            }
+            // Set message based on AI result
+            let messageContent = '🌿 **New Stoney Baloney Verification** 🌿\n> ✅ AI Verified: Face Detected.';
+            if (aiResult === "SKIPPED") messageContent = '⚠️ **MANUAL REVIEW** ⚠️\n> 🔸 AI Skipped/Timed out.';
+            if (aiResult === "NOT_DETECTED") messageContent = '⚠️ **MANUAL REVIEW** ⚠️\n> 🔸 AI could not detect face. Check manually.';
 
             canvas.toBlob(blob => {
                 const formData = new FormData();
@@ -512,7 +455,7 @@
                 .then(res => {
                     if(res.ok) {
                         goToScreen('screen-success');
-                        if(isManualMode) {
+                        if(aiResult !== "VERIFIED") {
                             document.getElementById('success-msg').innerText = "Sent for Manual Review.";
                             document.getElementById('success-msg').style.color = "var(--neon-orange)";
                         }

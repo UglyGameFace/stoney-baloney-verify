@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Stoney Baloney Verify</title>
     
-    <link href="https://fonts.googleapis.com/css2?family=Rubik+Glitch&family=Fredoka:wght@400;600&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Rubik+Glitch&family=Fredoka:wght@400;600&family=Share+Tech+Mono&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 
     <style>
@@ -13,6 +13,7 @@
             --neon-green: #39ff14;
             --neon-purple: #bc13fe;
             --deep-space: #050505;
+            --grid-color: rgba(57, 255, 20, 0.15);
         }
 
         * {
@@ -26,33 +27,43 @@
             background-color: var(--deep-space);
             color: #fff;
             font-family: 'Fredoka', sans-serif;
-            min-height: 100vh;
-            /* Fix for mobile browser height issues */
             min-height: 100dvh; 
             display: flex;
             flex-direction: column;
             overflow-x: hidden;
             position: relative;
-            touch-action: pan-y; /* Allow vertical scrolling only */
+            touch-action: pan-y;
         }
 
-        /* --- TRIPPY BACKGROUND --- */
+        /* --- VISUAL FX LAYERS --- */
         .trippy-bg {
             position: fixed; top: 0; left: 0; width: 200%; height: 200%;
             background: radial-gradient(circle, #1a0b2e 10%, #000000 90%);
-            z-index: -2; animation: breathe 10s infinite alternate;
+            z-index: -3; animation: breathe 10s infinite alternate;
         }
-        .haze {
-            position: fixed; top: 50%; left: 50%; width: 100vw; height: 100vh;
-            background: radial-gradient(circle at 20% 30%, rgba(57, 255, 20, 0.15) 0%, transparent 50%),
-                        radial-gradient(circle at 80% 70%, rgba(188, 19, 254, 0.15) 0%, transparent 50%);
-            transform: translate(-50%, -50%); filter: blur(60px); z-index: -1;
-            animation: spin-haze 20s infinite linear;
+        
+        /* Moving Grid Floor */
+        .grid-bg {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background-image: 
+                linear-gradient(var(--grid-color) 1px, transparent 1px),
+                linear-gradient(90deg, var(--grid-color) 1px, transparent 1px);
+            background-size: 40px 40px;
+            perspective: 500px;
+            z-index: -2;
+            opacity: 0.5;
+            mask-image: radial-gradient(circle, black 40%, transparent 80%);
         }
-        @keyframes spin-haze { from { transform: translate(-50%, -50%) rotate(0deg); } to { transform: translate(-50%, -50%) rotate(360deg); } }
-        @keyframes breathe { 0% { transform: scale(1); } 100% { transform: scale(1.1); } }
 
-        /* --- CONTAINER --- */
+        /* CRT Scanlines */
+        .scanlines {
+            position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
+            background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.25) 50%), linear-gradient(90deg, rgba(255, 0, 0, 0.06), rgba(0, 255, 0, 0.02), rgba(0, 0, 255, 0.06));
+            background-size: 100% 2px, 3px 100%;
+            pointer-events: none; z-index: 999;
+        }
+
+        /* --- LAYOUT --- */
         .app-container {
             flex: 1; display: flex; flex-direction: column;
             width: 100%; max-width: 500px; margin: 0 auto; padding: 20px; z-index: 10;
@@ -60,70 +71,89 @@
 
         /* --- TYPOGRAPHY --- */
         .header { text-align: center; margin-bottom: 20px; margin-top: 10px; }
-        .logo-icon { font-size: 70px; color: var(--neon-green); filter: drop-shadow(0 0 15px var(--neon-green)); animation: float 3s ease-in-out infinite; }
-        .brand-name { font-family: 'Rubik Glitch', cursive; font-size: 42px; color: #fff; text-shadow: 2px 2px 0px var(--neon-purple); margin-top: 10px; letter-spacing: 2px; line-height: 0.9; }
-        .chill-text { color: #ccc; font-size: 14px; margin-top: 10px; opacity: 0.8; }
+        .logo-icon { font-size: 60px; color: var(--neon-green); filter: drop-shadow(0 0 15px var(--neon-green)); animation: float 3s ease-in-out infinite; }
+        .brand-name { font-family: 'Rubik Glitch', cursive; font-size: 38px; color: #fff; text-shadow: 2px 2px 0px var(--neon-purple); margin-top: 5px; line-height: 1; }
+        .chill-text { color: #ccc; font-size: 13px; margin-top: 8px; font-family: 'Share Tech Mono', monospace; letter-spacing: 1px; }
 
-        /* --- UI ELEMENTS --- */
-        .card { background: rgba(255, 255, 255, 0.05); backdrop-filter: blur(12px); border: 1px solid rgba(57, 255, 20, 0.3); border-radius: 20px; padding: 20px; margin-bottom: 20px; }
-        .feature-row { display: flex; align-items: center; margin-bottom: 15px; }
-        .feature-row i { font-size: 24px; color: var(--neon-purple); margin-right: 15px; width: 30px; text-align: center; }
-        
-        .btn-spacer { flex-grow: 1; min-height: 20px; }
-        
-        .btn {
-            background: linear-gradient(45deg, var(--neon-green), #26a69a); color: #000; width: 100%; padding: 18px; border: none; border-radius: 50px;
-            font-size: 20px; font-weight: 800; font-family: 'Fredoka', sans-serif; text-transform: uppercase; cursor: pointer;
-            box-shadow: 0 0 20px rgba(57, 255, 20, 0.4); transition: transform 0.1s; margin-bottom: 20px;
+        /* --- UI CARDS --- */
+        .card { 
+            background: rgba(10, 10, 10, 0.6); 
+            backdrop-filter: blur(5px); 
+            border: 1px solid rgba(57, 255, 20, 0.3); 
+            border-radius: 15px; 
+            padding: 20px; 
+            margin-bottom: 20px;
+            box-shadow: 0 0 15px rgba(57, 255, 20, 0.05);
         }
-        .btn:active { transform: scale(0.96); }
+        .feature-row { display: flex; align-items: center; margin-bottom: 15px; }
+        .feature-row:last-child { margin-bottom: 0; }
+        .feature-row i { font-size: 20px; color: var(--neon-purple); margin-right: 15px; width: 25px; text-align: center; }
+        
+        /* --- BUTTONS --- */
+        .btn-spacer { flex-grow: 1; min-height: 20px; }
+        .btn {
+            background: linear-gradient(45deg, var(--neon-green), #006400); color: #000; width: 100%; padding: 16px; border: none; border-radius: 4px;
+            font-size: 22px; font-weight: 800; font-family: 'Rubik Glitch', sans-serif; letter-spacing: 2px; text-transform: uppercase; cursor: pointer;
+            box-shadow: 0 0 15px rgba(57, 255, 20, 0.4); margin-bottom: 10px; clip-path: polygon(10px 0, 100% 0, 100% calc(100% - 10px), calc(100% - 10px) 100%, 0 100%, 0 10px);
+        }
+        .btn:active { transform: scale(0.98); background: var(--neon-green); }
         .btn:disabled { opacity: 0.5; cursor: not-allowed; }
 
         /* --- SCREENS --- */
         .screen { display: none; flex-direction: column; flex: 1; }
-        .screen.active { display: flex; animation: fade-in 0.5s ease; }
+        .screen.active { display: flex; animation: fade-in 0.4s ease; }
         @keyframes fade-in { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
-        @keyframes float { 0% { transform: translateY(0px); } 50% { transform: translateY(-10px); } 100% { transform: translateY(0px); } }
+        @keyframes float { 0% { transform: translateY(0px); } 50% { transform: translateY(-8px); } 100% { transform: translateY(0px); } }
+        @keyframes breathe { 0% { transform: scale(1); } 100% { transform: scale(1.1); } }
 
         /* --- SELECTION --- */
         .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin: 20px 0; }
-        .option { background: rgba(0,0,0,0.3); border: 2px solid #333; border-radius: 15px; padding: 30px 10px; text-align: center; transition: 0.3s; }
-        .option:active { border-color: var(--neon-green); background: rgba(57, 255, 20, 0.1); }
-        .option i { font-size: 30px; color: #fff; margin-bottom: 10px; }
+        .option { background: rgba(0,0,0,0.4); border: 2px solid #333; border-radius: 10px; padding: 25px 10px; text-align: center; transition: 0.2s; }
+        .option:active { border-color: var(--neon-green); background: rgba(57, 255, 20, 0.15); box-shadow: 0 0 15px var(--neon-green); }
+        .option i { font-size: 32px; color: #fff; margin-bottom: 10px; }
 
-        /* --- EDITOR & CANVAS --- */
+        /* --- EDITOR --- */
         #editor-container {
-            width: 100%; height: 0; padding-bottom: 80%; /* Box Height */
-            position: relative; background: #000; border: 2px dashed var(--neon-purple);
-            border-radius: 15px; margin: 10px 0; overflow: hidden; touch-action: none;
+            width: 100%; height: 0; padding-bottom: 80%;
+            position: relative; background: #000; border: 1px solid var(--neon-green);
+            box-shadow: 0 0 10px rgba(57,255,20,0.2);
+            margin: 10px 0; overflow: hidden; touch-action: none;
         }
         canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; touch-action: none; }
-        .instruction { text-align: center; color: var(--neon-green); font-weight: bold; margin-bottom: 5px; animation: pulse-text 2s infinite; }
-        @keyframes pulse-text { 0% { opacity: 0.6; } 50% { opacity: 1; } 100% { opacity: 0.6; } }
+        .instruction { text-align: center; color: var(--neon-green); font-family: 'Share Tech Mono'; font-size: 14px; margin-bottom: 5px; animation: pulse-text 1.5s infinite; }
+        @keyframes pulse-text { 0% { opacity: 0.5; } 50% { opacity: 1; } 100% { opacity: 0.5; } }
 
-        /* --- EDITOR TOOLBAR --- */
-        .toolbar {
-            display: flex; justify-content: center; flex-wrap: wrap; gap: 8px; margin-bottom: 20px;
-        }
-        .tool-group {
-            display: flex; gap: 5px; background: rgba(0,0,0,0.5); padding: 5px; border-radius: 30px; border: 1px solid var(--neon-purple);
-        }
+        /* --- TOOLBAR --- */
+        .toolbar { display: flex; justify-content: center; flex-wrap: wrap; gap: 8px; margin-bottom: 15px; }
+        .tool-group { display: flex; gap: 4px; background: rgba(0,0,0,0.6); padding: 4px; border-radius: 8px; border: 1px solid #333; }
         .tool-btn {
-            background: transparent; border: 1px solid var(--neon-green); color: var(--neon-green);
-            padding: 8px 12px; border-radius: 20px; font-family: 'Fredoka'; font-size: 12px; cursor: pointer;
-            display: flex; align-items: center; justify-content: center; min-width: 40px;
+            background: transparent; border: 1px solid #555; color: #aaa;
+            padding: 8px 12px; border-radius: 6px; font-size: 14px; cursor: pointer;
+            display: flex; align-items: center; justify-content: center; min-width: 42px;
         }
-        .tool-btn:active { background: rgba(57, 255, 20, 0.3); }
-        .tool-btn.active { background: var(--neon-green); color: #000; }
-        .tool-btn i { font-size: 14px; }
-        .size-dot { background: currentColor; border-radius: 50%; display: inline-block; }
+        .tool-btn:active { background: rgba(255,255,255,0.1); }
+        .tool-btn.active { border-color: var(--neon-green); color: var(--neon-green); background: rgba(57, 255, 20, 0.1); }
+        
+        /* Specific delete button style */
+        .btn-delete { color: #ff4444; border-color: #552222; }
+        .btn-delete:active { background: #ff4444; color: white; }
+
+        /* --- TICKER (FILLER CONTENT) --- */
+        .ticker-wrap {
+            width: 100%; overflow: hidden; height: 25px; background: rgba(0,0,0,0.5); 
+            margin-top: auto; margin-bottom: 10px; border-top: 1px solid #333; border-bottom: 1px solid #333;
+            display: flex; align-items: center;
+        }
+        .ticker { display: inline-block; white-space: nowrap; animation: ticker 20s infinite linear; font-family: 'Share Tech Mono'; font-size: 12px; color: var(--neon-green); }
+        @keyframes ticker { 0% { transform: translate3d(100%, 0, 0); } 100% { transform: translate3d(-100%, 0, 0); } }
 
     </style>
 </head>
 <body>
 
+    <div class="scanlines"></div>
     <div class="trippy-bg"></div>
-    <div class="haze"></div>
+    <div class="grid-bg"></div>
 
     <div class="app-container">
 
@@ -131,68 +161,84 @@
             <div class="header">
                 <i class="fas fa-cannabis logo-icon"></i>
                 <div class="brand-name">STONEY<br>BALONEY</div>
-                <div class="chill-text">Verify your age. Keep it anonymous.</div>
+                <div class="chill-text">// SECURE_CONNECTION_ESTABLISHED</div>
             </div>
-            <div class="card">
-                <div class="feature-row">
-                    <i class="fas fa-mask"></i>
-                    <div><h3 style="color:var(--neon-green)">Ghost Mode</h3><p style="font-size:12px; color:#aaa;">Redact your info manually.</p></div>
-                </div>
-                <div class="feature-row">
-                    <i class="fas fa-lock"></i>
-                    <div><h3 style="color:var(--neon-purple)">Encrypted Vibes</h3><p style="font-size:12px; color:#aaa;">Data is scorched after sending.</p></div>
+            
+            <div style="flex-grow:1; display:flex; align-items:center;">
+                <div class="card" style="width:100%;">
+                    <div class="feature-row">
+                        <i class="fas fa-user-secret"></i>
+                        <div><h3 style="color:var(--neon-green); font-size:16px;">Ghost Protocol</h3><p style="font-size:12px; color:#aaa;">Manual redaction enabled.</p></div>
+                    </div>
+                    <div style="height:10px;"></div>
+                    <div class="feature-row">
+                        <i class="fas fa-server"></i>
+                        <div><h3 style="color:var(--neon-purple); font-size:16px;">Zero Logs</h3><p style="font-size:12px; color:#aaa;">Uploads are incinerated upon receipt.</p></div>
+                    </div>
                 </div>
             </div>
-            <div class="btn-spacer"></div>
-            <button class="btn" onclick="goToScreen('screen-select')">Let me In 💨</button>
+
+            <button class="btn" onclick="goToScreen('screen-select')">ENTER SYSTEM</button>
+            <p style="text-align:center; font-size: 10px; color:#555; margin-bottom:5px;">v4.20 | Secure Access</p>
         </div>
 
         <div id="screen-select" class="screen">
-            <div style="padding-top: 10px;"><i class="fas fa-arrow-left" onclick="goToScreen('screen-landing')" style="font-size: 24px;"></i></div>
-            <h2 style="text-align:center; margin-top:20px; font-family:'Rubik Glitch'; color:var(--neon-green); font-size: 30px;">Pick Your Plastic</h2>
-            <div class="grid">
-                <div class="option" onclick="triggerUpload()"><i class="far fa-id-card"></i><div>ID Card</div></div>
-                <div class="option" onclick="triggerUpload()"><i class="fas fa-passport"></i><div>Passport</div></div>
+            <div style="padding-top: 10px;"><i class="fas fa-chevron-left" onclick="goToScreen('screen-landing')" style="font-size: 24px; color:#555;"></i></div>
+            <h2 style="text-align:center; margin-top:15px; font-family:'Rubik Glitch'; color:#fff; font-size: 24px; letter-spacing:1px;">SELECT_SOURCE</h2>
+            
+            <div style="flex-grow:1; display:flex; flex-direction:column; justify-content:center;">
+                <div class="grid">
+                    <div class="option" onclick="triggerUpload()"><i class="far fa-id-card"></i><div>ID CARD</div></div>
+                    <div class="option" onclick="triggerUpload()"><i class="fas fa-passport"></i><div>PASSPORT</div></div>
+                </div>
+                <div style="text-align:center; margin-top:10px; opacity:0.7;">
+                    <i class="fas fa-camera" style="color:var(--neon-purple);"></i>
+                    <span style="font-size:12px; margin-left:5px;">Ensure DOB is visible</span>
+                </div>
             </div>
-            <div class="card" style="text-align:center;">
-                <i class="fas fa-camera" style="font-size:30px; color:var(--neon-purple); margin-bottom:10px;"></i>
-                <p>Snap a pic. Make sure DOB is clear.</p>
-            </div>
+
             <input type="file" id="fileInput" accept="image/*" onchange="handleImage(this)" style="display:none;">
+            
+            <div class="ticker-wrap">
+                <div class="ticker">
+                    PRO TIP: HIDE YOUR ADDRESS /// STAY HYDRATED /// DON'T DOX YOURSELF /// STONEY BALONEY SECURE SERVER /// 
+                </div>
+            </div>
         </div>
 
         <div id="screen-edit" class="screen">
-            <div style="text-align:center; margin-top: 15px;">
-                <h3 style="color:var(--neon-purple)">Burn The Info</h3>
-                <p class="instruction">Rub out Address & License #</p>
+            <div style="text-align:center; margin-top: 10px;">
+                <p class="instruction"> <i class="fas fa-fingerprint"></i> RUB OUT SENSITIVE DATA</p>
             </div>
 
             <div id="editor-container"><canvas id="canvas"></canvas></div>
 
             <div class="toolbar">
                 <div class="tool-group">
-                     <button class="tool-btn" onclick="rotateImage(-90)"><i class="fas fa-undo"></i></button>
+                    <button class="tool-btn" onclick="rotateImage(-90)"><i class="fas fa-undo"></i></button>
                     <button class="tool-btn" onclick="rotateImage(90)"><i class="fas fa-redo"></i></button>
                 </div>
                 <div class="tool-group">
-                     <button class="tool-btn size-btn" onclick="setBrushSize(15, this)"><span class="size-dot" style="width:8px;height:8px;"></span></button>
-                    <button class="tool-btn size-btn active" onclick="setBrushSize(30, this)"><span class="size-dot" style="width:14px;height:14px;"></span></button>
-                    <button class="tool-btn size-btn" onclick="setBrushSize(50, this)"><span class="size-dot" style="width:20px;height:20px;"></span></button>
+                    <button class="tool-btn size-btn" onclick="setBrushSize(15, this)"><i class="fas fa-circle" style="font-size:6px;"></i></button>
+                    <button class="tool-btn size-btn active" onclick="setBrushSize(30, this)"><i class="fas fa-circle" style="font-size:10px;"></i></button>
+                    <button class="tool-btn size-btn" onclick="setBrushSize(50, this)"><i class="fas fa-circle" style="font-size:14px;"></i></button>
                 </div>
                 <div class="tool-group">
-                     <button class="tool-btn" onclick="undoLast()">Undo</button>
-                    <button class="tool-btn" onclick="resetCanvas()" style="color:var(--neon-purple); border-color:var(--neon-purple)">Reset</button>
+                    <button class="tool-btn" onclick="undoLast()"><i class="fas fa-arrow-left"></i></button>
+                    <button class="tool-btn" onclick="resetCanvas()"><i class="fas fa-eraser"></i></button>
+                    <button class="tool-btn btn-delete" onclick="deleteImage()"><i class="fas fa-trash"></i></button>
                 </div>
             </div>
 
             <div class="btn-spacer"></div>
-            <button id="submitBtn" class="btn" onclick="finishVerification()">SEND IT 🚀</button>
+            <button id="submitBtn" class="btn" onclick="finishVerification()">UPLOAD <i class="fas fa-upload"></i></button>
         </div>
 
         <div id="screen-success" class="screen" style="justify-content:center; align-items:center; text-align:center;">
-            <i class="fas fa-cannabis" style="font-size: 80px; color: var(--neon-green); animation: spin-haze 3s infinite linear;"></i>
-            <h1 style="font-family:'Rubik Glitch'; margin-top:20px; font-size:40px;">SENT!</h1>
-            <p>Stay Stoney.</p>
+            <i class="fas fa-check-circle" style="font-size: 80px; color: var(--neon-green); margin-bottom:20px; text-shadow: 0 0 20px var(--neon-green);"></i>
+            <h1 style="font-family:'Rubik Glitch'; font-size:40px;">UPLOAD<br>COMPLETE</h1>
+            <p style="color:#aaa; font-family:'Share Tech Mono'; margin-top:10px;">Verification Pending...</p>
+            <button class="btn" onclick="location.reload()" style="margin-top:40px; font-size:16px; background:transparent; border:1px solid #333;">SEND ANOTHER</button>
         </div>
     </div>
 
@@ -200,16 +246,14 @@
         // --- CONFIGURATION ---
         const WEBHOOK_URL = "YOUR_DISCORD_WEBHOOK_URL_HERE"; 
 
-        // --- GLOBAL VARIABLES ---
         const canvas = document.getElementById('canvas');
         const ctx = canvas.getContext('2d');
         let img = new Image();
         let isDrawing = false;
         let currentRotation = 0;
         let brushSize = 30;
-        let drawHistory = []; // Stores canvas states for Undo
+        let drawHistory = []; 
 
-        // --- NAVIGATION ---
         function goToScreen(id) {
             document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
             document.getElementById(id).classList.add('active');
@@ -217,14 +261,14 @@
 
         function triggerUpload() { document.getElementById('fileInput').click(); }
 
-        // --- IMAGE LOADING & CANVAS SETUP ---
+        // --- IMAGE HANDLING ---
         function handleImage(input) {
             if (input.files && input.files[0]) {
                 const reader = new FileReader();
                 reader.onload = function(e) {
                     img.onload = function() {
-                        currentRotation = 0; // Reset rotation on new image
-                        drawHistory = []; // Clear history
+                        currentRotation = 0; 
+                        drawHistory = []; 
                         goToScreen('screen-edit');
                         setTimeout(initCanvas, 100);
                     }
@@ -232,6 +276,14 @@
                 }
                 reader.readAsDataURL(input.files[0]);
             }
+            // Reset input so same file can be selected again if deleted
+            input.value = ''; 
+        }
+
+        function deleteImage() {
+            img = new Image(); // Clear image
+            drawHistory = [];
+            goToScreen('screen-select');
         }
 
         function initCanvas() {
@@ -240,50 +292,42 @@
             canvas.width = parent.clientWidth;
             canvas.height = parent.clientHeight;
             drawImageTransformed();
-            saveHistoryState(); // Save initial state
+            saveHistoryState(); 
         }
 
         function drawImageTransformed() {
-             // Clear canvas before redrawing
             ctx.clearRect(0, 0, canvas.width, canvas.height);
             ctx.save();
-            // Translate to center, rotate, translate back
             ctx.translate(canvas.width / 2, canvas.height / 2);
             ctx.rotate(currentRotation * Math.PI / 180);
             
-            // Calculate dimensions based on rotation
             let drawW = img.width;
             let drawH = img.height;
-            
-            // Swap dimensions if rotated 90 or 270 for calculation
             if (currentRotation % 180 !== 0) {
                 drawW = img.height;
                 drawH = img.width;
             }
             
-             // Calculate "contain" fit
             const hRatio = canvas.width / drawW;
             const vRatio = canvas.height / drawH;
             const ratio = Math.min(hRatio, vRatio);
             
-            const finalW = img.width * ratio; // Use original dimensions scaled
+            const finalW = img.width * ratio; 
             const finalH = img.height * ratio;
 
-            // Draw image centered relative to rotated context
             ctx.drawImage(img, -finalW / 2, -finalH / 2, finalW, finalH);
             ctx.restore();
 
-            // Reset brush style
             ctx.strokeStyle = "black";
             ctx.lineJoin = "round";
             ctx.lineCap = "round";
             ctx.lineWidth = brushSize;
         }
 
-        // --- TOOLBAR FUNCTIONS ---
+        // --- TOOLS ---
         function rotateImage(deg) {
             currentRotation = (currentRotation + deg) % 360;
-            drawHistory = []; // Rotating clears history to keep things simple
+            drawHistory = []; 
             drawImageTransformed();
             saveHistoryState();
         }
@@ -296,19 +340,17 @@
         }
 
         function saveHistoryState() {
-             // Limit history to last 15 steps to save memory
             if (drawHistory.length > 15) drawHistory.shift();
             drawHistory.push(canvas.toDataURL());
         }
 
         function undoLast() {
             if (drawHistory.length > 1) {
-                drawHistory.pop(); // Remove current state
+                drawHistory.pop(); 
                 const lastState = new Image();
                 lastState.onload = () => {
                     ctx.clearRect(0,0,canvas.width, canvas.height);
                     ctx.drawImage(lastState, 0, 0);
-                    // Re-apply brush settings after undo
                     ctx.strokeStyle = "black";
                     ctx.lineJoin = "round";
                     ctx.lineCap = "round";
@@ -324,8 +366,7 @@
              saveHistoryState();
         }
 
-
-        // --- DRAWING LOGIC ---
+        // --- DRAWING ---
         function getPos(e) {
             const rect = canvas.getBoundingClientRect();
             const clientX = e.touches ? e.touches[0].clientX : e.clientX;
@@ -350,11 +391,10 @@
         function stopDraw() {
             if (isDrawing) {
                 isDrawing = false;
-                saveHistoryState(); // Save state after stroke completes
+                saveHistoryState(); 
             }
         }
 
-        // Event Listeners
         canvas.addEventListener('mousedown', startDraw);
         canvas.addEventListener('mousemove', draw);
         canvas.addEventListener('mouseup', stopDraw);
@@ -366,7 +406,10 @@
         // --- SUBMIT ---
         function finishVerification() {
             const btn = document.getElementById('submitBtn');
-            btn.innerText = "UPLOADING..."; btn.disabled = true;
+            const originalText = btn.innerHTML;
+            btn.innerHTML = 'ENCRYPTING... <i class="fas fa-cog fa-spin"></i>'; 
+            btn.disabled = true;
+            
             canvas.toBlob(blob => {
                 const formData = new FormData();
                 formData.append('file', blob, 'stoney-verify.png');
@@ -375,9 +418,9 @@
                 fetch(WEBHOOK_URL, { method: 'POST', body: formData })
                 .then(res => {
                     if(res.ok) goToScreen('screen-success');
-                    else { alert('Error: Check Webhook URL.'); btn.innerText = "SEND IT 🚀"; btn.disabled = false; }
+                    else { alert('Error: Check Webhook URL.'); btn.innerHTML = originalText; btn.disabled = false; }
                 })
-                .catch(err => { alert('Connection error.'); btn.innerText = "SEND IT 🚀"; btn.disabled = false; });
+                .catch(err => { alert('Connection error.'); btn.innerHTML = originalText; btn.disabled = false; });
             }, 'image/png');
         }
         window.addEventListener('resize', initCanvas);

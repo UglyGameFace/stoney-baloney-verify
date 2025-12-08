@@ -2,374 +2,338 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Stoney Baloney Verify</title>
-    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;700;900&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    
+    <link href="https://fonts.googleapis.com/css2?family=Rubik+Glitch&family=Fredoka:wght@400;600&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 
     <style>
         :root {
-            --primary: #2ecc71; /* Cannabis Green */
-            --dark-bg: #0a0a0a;
-            --card-bg: #141414;
-            --text-color: #ffffff;
-            --smoke: rgba(46, 204, 113, 0.1);
+            --neon-green: #39ff14;
+            --neon-purple: #bc13fe;
+            --deep-space: #050505;
         }
 
         * {
             box-sizing: border-box;
             margin: 0;
             padding: 0;
-            user-select: none;
+            -webkit-tap-highlight-color: transparent;
         }
 
         body {
-            background-color: var(--dark-bg);
-            color: var(--text-color);
-            font-family: 'Montserrat', sans-serif;
-            height: 100vh;
-            overflow: hidden;
+            background-color: var(--deep-space);
+            color: #fff;
+            font-family: 'Fredoka', sans-serif;
+            min-height: 100dvh; /* Mobile browser friendly height */
             display: flex;
             flex-direction: column;
-            align-items: center;
-            justify-content: center;
+            overflow-x: hidden;
             position: relative;
         }
 
-        /* --- SMOKE ANIMATION BACKGROUND --- */
-        .smoke-container {
-            position: absolute;
+        /* --- TRIPPY BACKGROUND ANIMATION --- */
+        .trippy-bg {
+            position: fixed;
             top: 0;
             left: 0;
-            width: 100%;
-            height: 100%;
+            width: 200%;
+            height: 200%;
+            background: radial-gradient(circle, #1a0b2e 10%, #000000 90%);
+            z-index: -2;
+            animation: breathe 10s infinite alternate;
+        }
+
+        .haze {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            width: 100vw;
+            height: 100vh;
+            background: 
+                radial-gradient(circle at 20% 30%, rgba(57, 255, 20, 0.15) 0%, transparent 50%),
+                radial-gradient(circle at 80% 70%, rgba(188, 19, 254, 0.15) 0%, transparent 50%);
+            transform: translate(-50%, -50%);
+            filter: blur(60px);
             z-index: -1;
-            overflow: hidden;
-            background: radial-gradient(circle at center, #1a1a1a 0%, #000 100%);
+            animation: spin-haze 20s infinite linear;
         }
 
-        .vapor {
-            position: absolute;
-            width: 600px;
-            height: 600px;
-            background: radial-gradient(circle, var(--smoke) 0%, transparent 60%);
-            border-radius: 50%;
-            animation: drift 10s infinite linear;
-            filter: blur(50px);
-            opacity: 0.6;
-        }
+        @keyframes spin-haze { from { transform: translate(-50%, -50%) rotate(0deg); } to { transform: translate(-50%, -50%) rotate(360deg); } }
+        @keyframes breathe { 0% { transform: scale(1); } 100% { transform: scale(1.1); } }
 
-        @keyframes drift {
-            0% { transform: translate(-50%, -50%) scale(1); opacity: 0.3; }
-            50% { transform: translate(0%, -20%) scale(1.5); opacity: 0.6; }
-            100% { transform: translate(50%, -50%) scale(1); opacity: 0.3; }
-        }
-
-        /* --- UI CONTAINER --- */
+        /* --- APP CONTAINER (SCROLLABLE) --- */
         .app-container {
-            width: 100%;
-            max-width: 450px;
-            height: 100%;
+            flex: 1;
             display: flex;
             flex-direction: column;
+            width: 100%;
+            max-width: 500px;
+            margin: 0 auto;
             padding: 20px;
-            justify-content: space-between;
             z-index: 10;
         }
 
-        /* --- HEADER / LOGO --- */
-        .header {
-            text-align: center;
-            margin-top: 40px;
-            animation: fadeInDown 1s ease;
-        }
+        /* --- LOGO & GLITCH --- */
+        .header { text-align: center; margin-bottom: 20px; margin-top: 10px; }
 
         .logo-icon {
-            font-size: 80px;
-            color: var(--primary);
-            text-shadow: 0 0 20px var(--primary);
-            margin-bottom: 10px;
-            animation: pulse 3s infinite;
+            font-size: 70px;
+            color: var(--neon-green);
+            filter: drop-shadow(0 0 15px var(--neon-green));
+            animation: float 3s ease-in-out infinite;
         }
 
         .brand-name {
-            font-size: 36px;
-            font-weight: 900;
-            color: var(--primary);
-            text-transform: uppercase;
-            letter-spacing: -1px;
-            line-height: 1;
+            font-family: 'Rubik Glitch', cursive;
+            font-size: 42px;
+            color: #fff;
+            text-shadow: 2px 2px 0px var(--neon-purple);
+            margin-top: 10px;
+            letter-spacing: 2px;
+            line-height: 0.9;
         }
 
-        .subtitle {
-            font-size: 14px;
-            color: #aaa;
-            margin-top: 15px;
-            line-height: 1.4;
-        }
-
-        /* --- CARDS & INFO --- */
-        .info-card {
-            background: rgba(20, 20, 20, 0.8);
-            border: 1px solid rgba(255, 255, 255, 0.1);
-            backdrop-filter: blur(10px);
-            border-radius: 20px;
-            padding: 25px;
-            margin: 20px 0;
-            animation: fadeInUp 1s ease 0.2s backwards;
-        }
-
-        .feature {
-            display: flex;
-            align-items: flex-start;
-            margin-bottom: 20px;
-        }
-
-        .feature:last-child { margin-bottom: 0; }
-
-        .feature i {
-            font-size: 24px;
-            color: var(--primary);
-            margin-right: 15px;
-            margin-top: 2px;
-        }
-
-        .feature h4 {
-            color: var(--primary);
-            margin-bottom: 5px;
-            font-size: 16px;
-        }
-
-        .feature p {
-            font-size: 13px;
+        .chill-text {
             color: #ccc;
-            line-height: 1.4;
+            font-size: 14px;
+            margin-top: 10px;
+            opacity: 0.8;
+        }
+
+        /* --- CARDS --- */
+        .card {
+            background: rgba(255, 255, 255, 0.05);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(57, 255, 20, 0.3);
+            border-radius: 20px;
+            padding: 20px;
+            margin-bottom: 20px;
+            box-shadow: 0 0 20px rgba(57, 255, 20, 0.05);
+        }
+
+        .feature-row {
+            display: flex;
+            align-items: center;
+            margin-bottom: 15px;
+        }
+        .feature-row i {
+            font-size: 24px;
+            color: var(--neon-purple);
+            margin-right: 15px;
+            width: 30px;
+            text-align: center;
         }
 
         /* --- BUTTONS --- */
+        .btn-spacer { flex-grow: 1; } /* Pushes button to bottom */
+        
         .btn {
-            background: var(--primary);
+            background: linear-gradient(45deg, var(--neon-green), #26a69a);
             color: #000;
             width: 100%;
             padding: 18px;
             border: none;
-            border-radius: 12px;
-            font-size: 18px;
+            border-radius: 50px; /* Pill shape */
+            font-size: 20px;
             font-weight: 800;
-            cursor: pointer;
-            box-shadow: 0 5px 20px rgba(46, 204, 113, 0.4);
-            transition: transform 0.2s, box-shadow 0.2s;
+            font-family: 'Fredoka', sans-serif;
             text-transform: uppercase;
-        }
-
-        .btn:active {
-            transform: scale(0.98);
-            box-shadow: 0 2px 10px rgba(46, 204, 113, 0.2);
+            cursor: pointer;
+            box-shadow: 0 0 20px rgba(57, 255, 20, 0.4);
+            transition: transform 0.1s;
+            margin-bottom: 10px; /* Safety margin for mobile */
+            position: relative;
+            overflow: hidden;
         }
         
-        .btn:disabled {
-            background: #555;
-            cursor: not-allowed;
-            box-shadow: none;
-        }
-
-        .footer-text {
-            text-align: center;
-            font-size: 11px;
-            color: #555;
-            margin-top: 15px;
-        }
+        .btn:active { transform: scale(0.96); }
 
         /* --- SCREENS --- */
-        .screen { display: none; height: 100%; flex-direction: column; }
-        .screen.active { display: flex; }
+        .screen { display: none; flex-direction: column; flex: 1; }
+        .screen.active { display: flex; animation: fade-in 0.5s ease; }
 
-        /* --- SELECTION SCREEN --- */
-        .grid-options {
-            display: grid;
-            grid-template-columns: 1fr;
-            gap: 15px;
-            margin-top: 30px;
-        }
+        @keyframes fade-in { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        @keyframes float { 0% { transform: translateY(0px); } 50% { transform: translateY(-10px); } 100% { transform: translateY(0px); } }
 
-        .option-card {
-            background: var(--card-bg);
+        /* --- SELECTION GRID --- */
+        .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin: 20px 0; }
+        .option {
+            background: rgba(0,0,0,0.3);
             border: 2px solid #333;
             border-radius: 15px;
-            padding: 30px;
+            padding: 30px 10px;
             text-align: center;
-            cursor: pointer;
             transition: 0.3s;
         }
+        .option:active { border-color: var(--neon-green); background: rgba(57, 255, 20, 0.1); }
+        .option i { font-size: 30px; color: #fff; margin-bottom: 10px; }
 
-        .option-card:hover, .option-card:active {
-            border-color: var(--primary);
-            background: #1a1a1a;
-        }
-
-        .option-card i {
-            font-size: 40px;
-            color: #888;
-            margin-bottom: 15px;
-        }
-        
-        .option-card.selected i { color: var(--primary); }
-
-        /* --- CANVAS REDACTOR --- */
-        #editor-area {
-            flex-grow: 1;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
+        /* --- CANVAS --- */
+        #editor-container {
+            width: 100%;
+            height: 0;
+            padding-bottom: 70%; /* Aspect ratio container */
             position: relative;
-            margin: 20px 0;
             background: #000;
-            border-radius: 10px;
+            border: 2px dashed var(--neon-purple);
+            border-radius: 15px;
+            margin: 20px 0;
             overflow: hidden;
-            border: 1px dashed #444;
         }
-
         canvas {
-            max-width: 100%;
-            max-height: 100%;
+            position: absolute;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
             touch-action: none;
         }
-
-        .tool-tip {
-            position: absolute;
-            top: 10px;
-            background: rgba(0,0,0,0.7);
-            padding: 5px 10px;
-            border-radius: 20px;
-            font-size: 12px;
-            color: var(--primary);
-            pointer-events: none;
+        .instruction {
+            text-align: center;
+            color: var(--neon-green);
+            font-weight: bold;
+            margin-bottom: 5px;
+            animation: pulse-text 2s infinite;
         }
+        @keyframes pulse-text { 0% { opacity: 0.6; } 50% { opacity: 1; } 100% { opacity: 0.6; } }
 
-        input[type="file"] { display: none; }
-
-        /* --- ANIMATIONS --- */
-        @keyframes fadeInDown { from { opacity: 0; transform: translateY(-20px); } to { opacity: 1; transform: translateY(0); } }
-        @keyframes fadeInUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
-        @keyframes pulse { 0% { text-shadow: 0 0 10px var(--primary); } 50% { text-shadow: 0 0 30px var(--primary); } 100% { text-shadow: 0 0 10px var(--primary); } }
     </style>
 </head>
 <body>
 
-    <div class="smoke-container">
-        <div class="vapor" style="top: 20%; left: 20%;"></div>
-        <div class="vapor" style="top: 80%; left: 80%; animation-delay: -5s;"></div>
-    </div>
+    <div class="trippy-bg"></div>
+    <div class="haze"></div>
 
     <div class="app-container">
-        
+
         <div id="screen-landing" class="screen active">
             <div class="header">
                 <i class="fas fa-cannabis logo-icon"></i>
                 <div class="brand-name">STONEY<br>BALONEY</div>
-                <div class="subtitle">The only verification that respects your privacy.</div>
+                <div class="chill-text">Verify your age. Keep it anonymous.</div>
             </div>
 
-            <div class="info-card">
-                <div class="feature">
-                    <i class="fas fa-eye-slash"></i>
+            <div class="card">
+                <div class="feature-row">
+                    <i class="fas fa-mask"></i>
                     <div>
-                        <h4>Total Privacy</h4>
-                        <p>We burn black boxes over your personal info <b>before</b> it leaves your device.</p>
+                        <h3 style="color:var(--neon-green)">Ghost Mode</h3>
+                        <p style="font-size:12px; color:#aaa;">Redact your info manually. We don't want your address.</p>
                     </div>
                 </div>
-                <br>
-                <div class="feature">
-                    <i class="fas fa-shield-alt"></i>
+                <div class="feature-row">
+                    <i class="fas fa-lock"></i>
                     <div>
-                        <h4>Secure Verify</h4>
-                        <p>Only your Face and DOB are visible. Your address and ID number are gone forever.</p>
+                        <h3 style="color:var(--neon-purple)">Encrypted Vibes</h3>
+                        <p style="font-size:12px; color:#aaa;">Data is scorched immediately after sending.</p>
                     </div>
                 </div>
             </div>
 
-            <div style="margin-top: auto;">
-                <button class="btn" onclick="goToScreen('screen-select')">Start Verification</button>
-                <p class="footer-text">By clicking Start, you agree to our chill privacy policy.</p>
-            </div>
+            <div class="btn-spacer"></div>
+            <button class="btn" onclick="goToScreen('screen-select')">Let me In 💨</button>
+            <p style="text-align:center; font-size: 10px; opacity: 0.5; margin-bottom: 10px;">By entering you agree you're chill.</p>
         </div>
 
         <div id="screen-select" class="screen">
-            <div style="margin-top: 20px;">
-                <i class="fas fa-arrow-left" style="color:white; font-size: 20px; cursor: pointer;" onclick="goToScreen('screen-landing')"></i>
-            </div>
-            <div class="header">
-                <h3>Select ID Type</h3>
+            <div style="padding-top: 10px;">
+                <i class="fas fa-arrow-left" onclick="goToScreen('screen-landing')" style="font-size: 24px;"></i>
             </div>
             
-            <div class="grid-options">
-                <div class="option-card" onclick="triggerUpload()">
+            <h2 style="text-align:center; margin-top:20px; font-family:'Rubik Glitch'; color:var(--neon-green); font-size: 30px;">Pick Your Plastic</h2>
+
+            <div class="grid">
+                <div class="option" onclick="triggerUpload()">
                     <i class="far fa-id-card"></i>
-                    <h3>ID Card</h3>
+                    <div>ID Card</div>
                 </div>
-                <div class="option-card" onclick="triggerUpload()">
+                <div class="option" onclick="triggerUpload()">
                     <i class="fas fa-passport"></i>
-                    <h3>Passport</h3>
+                    <div>Passport</div>
                 </div>
             </div>
-            <input type="file" id="fileInput" accept="image/*" onchange="handleImage(this)">
+
+            <div class="card" style="text-align:center;">
+                <i class="fas fa-camera" style="font-size:30px; color:var(--neon-purple); margin-bottom:10px;"></i>
+                <p>Snap a pic of your ID. Make sure the DOB is clear.</p>
+            </div>
+
+            <input type="file" id="fileInput" accept="image/*" onchange="handleImage(this)" style="display:none;">
         </div>
 
-        <div id="screen-redact" class="screen">
-             <div style="display:flex; justify-content:space-between; align-items:center; margin-top:20px;">
-                <i class="fas fa-arrow-left" style="color:white; font-size: 20px; cursor: pointer;" onclick="goToScreen('screen-select')"></i>
-                <span style="color: var(--primary); font-size: 14px;">ENCRYPTED CONNECTION <i class="fas fa-lock"></i></span>
+        <div id="screen-edit" class="screen">
+            <div style="display:flex; justify-content:space-between; align-items:center;">
+                <i class="fas fa-arrow-left" onclick="goToScreen('screen-select')" style="font-size: 24px;"></i>
+                <span style="color:var(--neon-green); font-size:12px; border:1px solid var(--neon-green); padding: 4px 8px; border-radius:10px;">SECURE</span>
             </div>
 
-            <div class="header" style="margin-top: 10px; margin-bottom: 10px;">
-                <h3>Protect Your Info</h3>
-                <p class="subtitle" style="margin-top:5px;">Rub your finger over your Address & ID Number to hide them.</p>
+            <div style="text-align:center; margin-top: 15px;">
+                <h3 style="color:var(--neon-purple)">Burn The Info</h3>
+                <p class="instruction">Rub your finger over your Address & License #</p>
             </div>
 
-            <div id="editor-area">
-                <div class="tool-tip"> <i class="fas fa-hand-pointer"></i> Touch & Drag to Redact</div>
+            <div id="editor-container">
                 <canvas id="canvas"></canvas>
             </div>
 
-            <button id="submitBtn" class="btn" onclick="finishVerification()">Submit Securely</button>
+            <div class="btn-spacer"></div>
+            <button id="submitBtn" class="btn" onclick="finishVerification()">SEND IT 🚀</button>
         </div>
-        
-        <div id="screen-success" class="screen" style="justify-content: center; align-items: center; text-align: center;">
-            <i class="fas fa-check-circle" style="font-size: 80px; color: var(--primary); margin-bottom: 20px;"></i>
-            <h2 style="color:white;">Verification Sent!</h2>
-            <p style="color:#aaa; margin-top: 10px;">Welcome to Stoney Baloney.</p>
+
+        <div id="screen-success" class="screen" style="justify-content:center; align-items:center; text-align:center;">
+            <i class="fas fa-cannabis" style="font-size: 80px; color: var(--neon-green); animation: spin-haze 3s infinite linear;"></i>
+            <h1 style="font-family:'Rubik Glitch'; margin-top:20px; font-size:40px;">SENT!</h1>
+            <p>Stay Stoney.</p>
         </div>
 
     </div>
 
     <script>
-        // REPLACE THIS WITH YOUR ACTUAL DISCORD WEBHOOK URL
-        const DISCORD_WEBHOOK_URL = "YOUR_DISCORD_WEBHOOK_URL_HERE";
+        // REPLACE WITH YOUR DISCORD WEBHOOK
+        const WEBHOOK_URL = "YOUR_DISCORD_WEBHOOK_URL_HERE";
 
-        // --- NAVIGATION ---
-        function goToScreen(screenId) {
+        function goToScreen(id) {
             document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
-            document.getElementById(screenId).classList.add('active');
+            document.getElementById(id).classList.add('active');
         }
 
-        function triggerUpload() {
-            document.getElementById('fileInput').click();
-        }
+        function triggerUpload() { document.getElementById('fileInput').click(); }
 
-        // --- IMAGE HANDLING & REDACTION ---
         const canvas = document.getElementById('canvas');
         const ctx = canvas.getContext('2d');
-        let isDrawing = false;
         let img = new Image();
+        let isDrawing = false;
+
+        // Resize canvas helper
+        function resizeCanvas() {
+            const parent = document.getElementById('editor-container');
+            canvas.width = parent.clientWidth;
+            canvas.height = parent.clientHeight;
+            if (img.src) {
+                // Draw image to fit "contain" style
+                const hRatio = canvas.width / img.width;
+                const vRatio = canvas.height / img.height;
+                const ratio = Math.min(hRatio, vRatio);
+                const centerShift_x = (canvas.width - img.width * ratio) / 2;
+                const centerShift_y = (canvas.height - img.height * ratio) / 2;
+                ctx.clearRect(0,0,canvas.width, canvas.height);
+                ctx.drawImage(img, 0,0, img.width, img.height, centerShift_x,centerShift_y,img.width*ratio, img.height*ratio);
+            }
+            // Reset brush styles after resize
+            ctx.strokeStyle = "black";
+            ctx.lineJoin = "round";
+            ctx.lineCap = "round";
+            ctx.lineWidth = 25;
+        }
 
         function handleImage(input) {
             if (input.files && input.files[0]) {
                 const reader = new FileReader();
                 reader.onload = function(e) {
                     img.onload = function() {
-                        setupCanvas();
-                        goToScreen('screen-redact');
+                        goToScreen('screen-edit');
+                        // Small delay to allow screen to render before sizing canvas
+                        setTimeout(resizeCanvas, 50);
                     }
                     img.src = e.target.result;
                 }
@@ -377,98 +341,59 @@
             }
         }
 
-        function setupCanvas() {
-            const parent = document.getElementById('editor-area');
-            const maxWidth = parent.clientWidth;
-            const maxHeight = parent.clientHeight;
-            
-            let width = img.width;
-            let height = img.height;
-
-            if (width > height) {
-                if (width > maxWidth) {
-                    height *= maxWidth / width;
-                    width = maxWidth;
-                }
-            } else {
-                if (height > maxHeight) {
-                    width *= maxHeight / height;
-                    height = maxHeight;
-                }
-            }
-
-            canvas.width = width;
-            canvas.height = height;
-            ctx.drawImage(img, 0, 0, width, height);
-            
-            ctx.strokeStyle = "black";
-            ctx.lineJoin = "round";
-            ctx.lineCap = "round";
-            ctx.lineWidth = 20; 
+        // Drawing Logic
+        function getPos(e) {
+            const rect = canvas.getBoundingClientRect();
+            const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+            const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+            return { x: clientX - rect.left, y: clientY - rect.top };
         }
 
-        // --- TOUCH/MOUSE DRAWING EVENTS ---
-        function startDraw(e) { isDrawing = true; draw(e); }
-        function stopDraw() { isDrawing = false; ctx.beginPath(); }
+        function startDraw(e) {
+            isDrawing = true;
+            const pos = getPos(e);
+            ctx.beginPath();
+            ctx.moveTo(pos.x, pos.y);
+            e.preventDefault();
+        }
 
         function draw(e) {
             if (!isDrawing) return;
-            e.preventDefault(); 
-            const rect = canvas.getBoundingClientRect();
-            let x, y;
-            if(e.touches) {
-                x = e.touches[0].clientX - rect.left;
-                y = e.touches[0].clientY - rect.top;
-            } else {
-                x = e.clientX - rect.left;
-                y = e.clientY - rect.top;
-            }
-            ctx.lineTo(x, y);
+            const pos = getPos(e);
+            ctx.lineTo(pos.x, pos.y);
             ctx.stroke();
-            ctx.beginPath();
-            ctx.moveTo(x, y);
+            e.preventDefault();
         }
+
+        function stopDraw() { isDrawing = false; }
 
         canvas.addEventListener('mousedown', startDraw);
         canvas.addEventListener('mousemove', draw);
         canvas.addEventListener('mouseup', stopDraw);
-        canvas.addEventListener('touchstart', startDraw);
-        canvas.addEventListener('touchmove', draw);
+        canvas.addEventListener('touchstart', startDraw, {passive: false});
+        canvas.addEventListener('touchmove', draw, {passive: false});
         canvas.addEventListener('touchend', stopDraw);
 
-        // --- SUBMIT TO DISCORD ---
         function finishVerification() {
             const btn = document.getElementById('submitBtn');
-            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Encrypting...';
-            btn.disabled = true;
-
-            // Convert canvas to blob for upload
-            canvas.toBlob(function(blob) {
+            btn.innerText = "UPLOADING...";
+            btn.style.opacity = "0.7";
+            
+            canvas.toBlob(blob => {
                 const formData = new FormData();
-                formData.append('file', blob, 'secure-verification.png');
-                formData.append('content', '**New Verification Request**\nUser has submitted a redacted ID.');
+                formData.append('file', blob, 'stoney-verify.png');
+                formData.append('content', '🌿 **New Stoney Baloney Verification** 🌿');
 
-                fetch(DISCORD_WEBHOOK_URL, {
-                    method: 'POST',
-                    body: formData
+                fetch(WEBHOOK_URL, { method: 'POST', body: formData })
+                .then(res => {
+                    if(res.ok) goToScreen('screen-success');
+                    else { alert('Glitch in the matrix. Try again.'); btn.innerText = "SEND IT 🚀"; }
                 })
-                .then(response => {
-                    if (response.ok) {
-                        goToScreen('screen-success');
-                    } else {
-                        alert("Error sending verification. Please try again.");
-                        btn.innerHTML = 'Submit Securely';
-                        btn.disabled = false;
-                    }
-                })
-                .catch(error => {
-                    console.error('Error:', error);
-                    alert("Connection error.");
-                    btn.innerHTML = 'Submit Securely';
-                    btn.disabled = false;
-                });
-            }, 'image/png');
+                .catch(err => { alert('Connection error.'); btn.innerText = "SEND IT 🚀"; });
+            });
         }
+        
+        window.addEventListener('resize', resizeCanvas);
     </script>
 </body>
 </html>

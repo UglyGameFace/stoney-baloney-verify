@@ -18,7 +18,6 @@
             --neon-orange: #ffaa00;
             --neon-purple: #bc13fe;
             --deep-space: #050505;
-            --grid-color: rgba(57, 255, 20, 0.15);
         }
 
         * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
@@ -30,7 +29,7 @@
 
         /* --- VISUAL FX --- */
         .trippy-bg { position: fixed; top: 0; left: 0; width: 200%; height: 200%; background: radial-gradient(circle, #1a0b2e 10%, #000000 90%); z-index: -3; animation: breathe 10s infinite alternate; }
-        .grid-bg { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-image: linear-gradient(var(--grid-color) 1px, transparent 1px), linear-gradient(90deg, var(--grid-color) 1px, transparent 1px); background-size: 40px 40px; perspective: 500px; z-index: -2; opacity: 0.5; mask-image: radial-gradient(circle, black 40%, transparent 80%); }
+        .grid-bg { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-image: linear-gradient(rgba(57, 255, 20, 0.15) 1px, transparent 1px), linear-gradient(90deg, rgba(57, 255, 20, 0.15) 1px, transparent 1px); background-size: 40px 40px; perspective: 500px; z-index: -2; opacity: 0.5; mask-image: radial-gradient(circle, black 40%, transparent 80%); }
         .scanlines { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.25) 50%), linear-gradient(90deg, rgba(255, 0, 0, 0.06), rgba(0, 255, 0, 0.02), rgba(0, 0, 255, 0.06)); background-size: 100% 2px, 3px 100%; pointer-events: none; z-index: 999; }
 
         /* --- LAYOUT --- */
@@ -51,53 +50,39 @@
         .option { background: rgba(0,0,0,0.4); border: 2px solid #333; border-radius: 10px; padding: 25px 10px; text-align: center; transition: 0.2s; }
         .option:active { border-color: var(--neon-green); background: rgba(57, 255, 20, 0.15); box-shadow: 0 0 15px var(--neon-green); }
         .option i { font-size: 32px; color: #fff; margin-bottom: 10px; }
-        .card { background: rgba(10, 10, 10, 0.6); backdrop-filter: blur(5px); border: 1px solid rgba(57, 255, 20, 0.3); border-radius: 15px; padding: 20px; margin-bottom: 20px; }
-        .feature-row { display: flex; align-items: center; margin-bottom: 15px; }
-        .feature-row:last-child { margin-bottom: 0; }
-        .feature-row i { font-size: 20px; color: var(--neon-purple); margin-right: 15px; width: 25px; text-align: center; }
         
-        .btn { background: linear-gradient(45deg, var(--neon-green), #006400); color: #000; width: 100%; padding: 16px; border: none; border-radius: 4px; font-size: 22px; font-weight: 800; font-family: 'Rubik Glitch', sans-serif; letter-spacing: 2px; text-transform: uppercase; cursor: pointer; box-shadow: 0 0 15px rgba(57, 255, 20, 0.4); margin-bottom: 10px; clip-path: polygon(10px 0, 100% 0, 100% calc(100% - 10px), calc(100% - 10px) 100%, 0 100%, 0 10px); }
-        .btn:active { transform: scale(0.98); background: var(--neon-green); }
+        .btn { background: linear-gradient(45deg, var(--neon-green), #006400); color: #000; width: 100%; padding: 16px; border: none; border-radius: 4px; font-size: 22px; font-weight: 800; font-family: 'Rubik Glitch', sans-serif; letter-spacing: 2px; text-transform: uppercase; cursor: pointer; box-shadow: 0 0 15px rgba(57, 255, 20, 0.4); margin-bottom: 10px; }
+        .btn:active { transform: scale(0.98); }
         .btn:disabled { opacity: 0.5; cursor: not-allowed; }
 
         /* --- EDITOR SCREEN --- */
         #editor-wrapper {
-            flex: 1; position: relative; background: #000; border: 2px solid var(--neon-green);
-            border-radius: 10px; overflow: hidden; margin-bottom: 10px; box-shadow: 0 0 20px rgba(57, 255, 20, 0.1);
+            flex: 1; position: relative; background: #000; border: 2px solid var(--neon-green); border-radius: 10px; overflow: hidden; margin-bottom: 10px; box-shadow: 0 0 20px rgba(57, 255, 20, 0.1);
         }
         canvas { display: block; width: 100%; height: 100%; }
 
-        .toolbar-main { display: flex; gap: 10px; justify-content: space-between; margin-bottom: 10px; }
+        /* Toolbar */
+        .toolbar-main { display: flex; gap: 8px; justify-content: space-between; margin-bottom: 10px; flex-wrap:wrap; }
         .tool-btn {
-            background: rgba(20, 20, 20, 0.9); border: 1px solid #444; color: #fff;
-            padding: 12px; border-radius: 8px; font-family: 'Share Tech Mono'; font-size: 12px;
-            flex: 1; text-align: center; display: flex; flex-direction: column; align-items: center; gap: 5px;
+            background: rgba(20, 20, 20, 0.9); border: 1px solid #444; color: #fff; padding: 10px; border-radius: 8px; font-family: 'Share Tech Mono'; font-size: 11px; flex: 1; text-align: center; display: flex; flex-direction: column; align-items: center; gap: 5px; min-width: 50px;
         }
-        .tool-btn i { font-size: 18px; color: var(--neon-green); }
-        .tool-btn:active { background: #333; border-color: var(--neon-green); }
+        .tool-btn i { font-size: 16px; color: var(--neon-green); }
+        .tool-btn.active { border-color: var(--neon-green); background: rgba(57, 255, 20, 0.1); }
         
-        .zoom-controls { position: absolute; bottom: 15px; right: 15px; display: flex; flex-direction: column; gap: 8px; }
-        .zoom-circle { width: 45px; height: 45px; border-radius: 50%; background: rgba(0,0,0,0.8); border: 2px solid var(--neon-green); color: var(--neon-green); font-size: 20px; display: flex; align-items: center; justify-content: center; }
+        .zoom-controls { position: absolute; bottom: 15px; right: 15px; display: flex; flex-direction: column; gap: 8px; z-index: 100; }
+        .zoom-circle { width: 40px; height: 40px; border-radius: 50%; background: rgba(0,0,0,0.8); border: 1px solid var(--neon-green); color: var(--neon-green); font-size: 18px; display: flex; align-items: center; justify-content: center; cursor: pointer;}
 
         /* --- TUTORIAL OVERLAY --- */
         #tutorial-overlay {
-            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
-            background: rgba(0,0,0,0.85); z-index: 500;
-            display: none; justify-content: center; align-items: center; flex-direction: column; text-align: center; backdrop-filter: blur(5px);
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.9); z-index: 500; display: none; justify-content: center; align-items: center; flex-direction: column; text-align: center;
         }
-        .tut-card { background: #111; border: 1px solid var(--neon-green); padding: 30px; border-radius: 15px; width: 80%; box-shadow: 0 0 30px rgba(57, 255, 20, 0.2); }
-        .tut-row { display: flex; align-items: center; margin-bottom: 20px; text-align: left; }
-        .tut-icon { font-size: 30px; width: 50px; text-align: center; margin-right: 15px; }
+        .tut-card { background: #111; border: 1px solid var(--neon-green); padding: 25px; border-radius: 15px; width: 85%; }
+        .tut-row { display: flex; align-items: center; margin-bottom: 15px; text-align: left; }
+        .tut-icon { font-size: 24px; width: 40px; text-align: center; margin-right: 10px; }
         
         /* --- LOADING OVERLAY --- */
-        #loading-overlay {
-            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-            background: rgba(0,0,0,0.95); z-index: 2000;
-            display: none; justify-content: center; align-items: center; flex-direction: column;
-        }
+        #loading-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.95); z-index: 2000; display: none; justify-content: center; align-items: center; flex-direction: column; }
         .loading-text { font-family: 'Rubik Glitch'; color: var(--neon-green); font-size: 24px; margin-top: 20px; }
-        .scanner-beam { width: 250px; height: 2px; background: var(--neon-green); animation: scan-beam 1.5s infinite linear; box-shadow: 0 0 10px var(--neon-green); }
-        @keyframes scan-beam { 0% { transform: translateY(-50px); opacity:0; } 50% { opacity:1; } 100% { transform: translateY(50px); opacity:0; } }
         
         #manual-options { display: none; width: 80%; text-align: center; margin-top: 20px; }
         .btn-manual { background: transparent; border: 1px solid var(--neon-orange); color: var(--neon-orange); padding: 10px; width: 100%; margin-top: 10px; }
@@ -112,7 +97,6 @@
     
     <div id="loading-overlay">
         <i class="fas fa-eye" style="font-size: 50px; color: #333;"></i>
-        <div class="scanner-beam"></div>
         <div class="loading-text" id="loading-msg">ANALYZING...</div>
         <div id="manual-options">
             <button class="btn btn-manual" onclick="forceEditor()">SKIP AI CHECK</button>
@@ -125,21 +109,18 @@
             <div class="header">
                 <i class="fas fa-cannabis logo-icon"></i>
                 <div class="brand-name">STONEY<br>BALONEY</div>
-                <div class="chill-text">// SECURE_VERIFY_V5</div>
+                <div class="chill-text">// SECURE_VERIFY_V6_PRO</div>
             </div>
-            <div style="flex:1; display:flex; align-items:center;">
-                <div class="card" style="width:100%;">
-                    <div class="feature-row"><i class="fas fa-search"></i><div><h3 style="color:var(--neon-green);">Smart Scan</h3><p style="color:#aaa;">Auto-detects ID.</p></div></div>
-                    <div class="feature-row"><i class="fas fa-hand-pointer"></i><div><h3 style="color:var(--neon-purple);">Easy Edit</h3><p style="color:#aaa;">Zoom & Redact easily.</p></div></div>
-                </div>
+            <div style="flex:1; display:flex; align-items:center; justify-content:center;">
+                <p style="text-align:center; color:#aaa; max-width:80%;">
+                    Secure, Client-Side Redaction.<br>No Server Storage.<br>Total Privacy.
+                </p>
             </div>
-            <button class="btn" onclick="goToScreen('screen-select')">START</button>
+            <button class="btn" onclick="goToScreen('screen-select')">START VERIFICATION</button>
         </div>
 
         <div id="screen-select" class="screen">
-            <div class="header">
-                <h2 style="font-family:'Rubik Glitch'; color:#fff;">UPLOAD ID</h2>
-            </div>
+            <div class="header"><h2 style="font-family:'Rubik Glitch'; color:#fff;">UPLOAD ID</h2></div>
             <div style="flex:1; display:flex; flex-direction:column; justify-content:center;">
                 <div class="grid">
                     <div class="option" onclick="triggerUpload()"><i class="far fa-id-card"></i><div>ID CARD</div></div>
@@ -151,7 +132,7 @@
 
         <div id="screen-edit" class="screen">
             <div style="text-align:center; margin-bottom: 5px;">
-                <span style="color:var(--neon-green); font-family:'Share Tech Mono';">SECURE EDITOR ACTIVE</span>
+                <span style="color:var(--neon-green); font-family:'Share Tech Mono';">HD EDITOR ACTIVE</span>
             </div>
 
             <div id="editor-wrapper">
@@ -159,16 +140,20 @@
                 
                 <div id="tutorial-overlay" onclick="closeTutorial()">
                     <div class="tut-card">
-                        <h3 style="color:#fff; margin-bottom:20px;">HOW TO EDIT</h3>
+                        <h3 style="color:#fff; margin-bottom:15px;">CONTROLS</h3>
                         <div class="tut-row">
                             <div class="tut-icon">👆</div>
-                            <div><strong style="color:var(--neon-green)">ONE FINGER</strong><br><span style="color:#aaa; font-size:12px;">Draw black lines</span></div>
+                            <div><strong style="color:var(--neon-green)">ONE FINGER</strong><br><span style="color:#aaa; font-size:12px;">Draw to Redact</span></div>
                         </div>
                         <div class="tut-row">
                             <div class="tut-icon">✌️</div>
-                            <div><strong style="color:var(--neon-purple)">TWO FINGERS</strong><br><span style="color:#aaa; font-size:12px;">Pinch to Zoom & Move</span></div>
+                            <div><strong style="color:var(--neon-purple)">TWO FINGERS</strong><br><span style="color:#aaa; font-size:12px;">Pinch to Zoom & Pan</span></div>
                         </div>
-                        <button class="btn" style="font-size:16px; padding:10px;">GOT IT</button>
+                        <div class="tut-row">
+                            <div class="tut-icon">💡</div>
+                            <div><span style="color:#aaa; font-size:12px;">Use Zoom (+/-) for precision.</span></div>
+                        </div>
+                        <button class="btn" style="font-size:14px; padding:10px;">I UNDERSTAND</button>
                     </div>
                 </div>
 
@@ -179,17 +164,20 @@
             </div>
 
             <div class="toolbar-main">
-                <div class="tool-btn" onclick="rotateImage()">
-                    <i class="fas fa-redo"></i>
-                    <span>ROTATE</span>
+                <div class="tool-btn size-btn" onclick="setBrushSize(10, this)">
+                    <div style="width:4px; height:4px; background:currentColor; border-radius:50%;"></div>
+                    <span>SMALL</span>
+                </div>
+                <div class="tool-btn size-btn active" onclick="setBrushSize(25, this)">
+                    <div style="width:8px; height:8px; background:currentColor; border-radius:50%;"></div>
+                    <span>MED</span>
+                </div>
+                <div class="tool-btn size-btn" onclick="setBrushSize(50, this)">
+                    <div style="width:14px; height:14px; background:currentColor; border-radius:50%;"></div>
+                    <span>LARGE</span>
                 </div>
                 <div class="tool-btn" onclick="undoLast()">
-                    <i class="fas fa-undo"></i>
-                    <span>UNDO</span>
-                </div>
-                <div class="tool-btn" onclick="resetCanvas()">
-                    <i class="fas fa-trash"></i>
-                    <span>CLEAR</span>
+                    <i class="fas fa-undo"></i><span>UNDO</span>
                 </div>
             </div>
 
@@ -218,9 +206,12 @@
         let lastPinchDist = 0;
         let lastTouch = {x:0, y:0};
         
+        // Settings
+        let brushSize = 25; 
         let aiResult = "SKIPPED";
         let faceModel = null;
         let scanTimer = null;
+        let drawTimeout = null; // Fix for accidental dots
 
         // INIT
         window.onload = async () => {
@@ -251,7 +242,7 @@
 
             const url = URL.createObjectURL(file);
             img.onload = () => {
-                // Shrink for AI (Fix Crash)
+                // Resize for AI (Thumbnail)
                 const aiCan = document.createElement('canvas');
                 const scale = Math.min(1, 400 / img.width);
                 aiCan.width = img.width * scale;
@@ -266,7 +257,6 @@
             try {
                 if(!faceModel) faceModel = await blazeface.load();
                 const preds = await faceModel.estimateFaces(canvasRef, false);
-                
                 if (preds.length > 0) {
                     aiResult = "VERIFIED";
                     forceEditor();
@@ -287,43 +277,56 @@
             goToScreen('screen-edit');
             
             strokes = [];
-            
-            // Auto Fit
-            const canvas = document.getElementById('canvas');
-            const wrapper = document.getElementById('editor-wrapper');
-            canvas.width = wrapper.clientWidth;
-            canvas.height = wrapper.clientHeight;
-            
-            const ratio = Math.min(canvas.width/img.width, canvas.height/img.height);
-            view = {
-                scale: ratio * 0.9, 
-                x: (canvas.width - img.width * (ratio*0.9)) / 2,
-                y: (canvas.height - img.height * (ratio*0.9)) / 2
-            };
-            
+            initEditorCanvas();
             document.getElementById('tutorial-overlay').style.display = 'flex';
-            render();
         }
 
         function closeTutorial() {
             document.getElementById('tutorial-overlay').style.display = 'none';
         }
 
-        // --- RENDER ENGINE ---
+        // --- RETINA SHARP RENDERER ---
+        function initEditorCanvas() {
+            const canvas = document.getElementById('canvas');
+            const wrapper = document.getElementById('editor-wrapper');
+            
+            // Set resolution to Device Pixel Ratio (Retina)
+            const dpr = window.devicePixelRatio || 1;
+            canvas.width = wrapper.clientWidth * dpr;
+            canvas.height = wrapper.clientHeight * dpr;
+            
+            // Initial view: Fit Image
+            const ratio = Math.min(canvas.width/img.width, canvas.height/img.height);
+            view = {
+                scale: ratio * 0.95, 
+                x: (canvas.width - img.width * (ratio*0.95)) / 2,
+                y: (canvas.height - img.height * (ratio*0.95)) / 2
+            };
+            render();
+        }
+
         function render() {
             const canvas = document.getElementById('canvas');
             const ctx = canvas.getContext('2d');
             
+            // Clear & Black BG
             ctx.clearRect(0, 0, canvas.width, canvas.height);
+            ctx.fillStyle = '#000';
+            ctx.fillRect(0,0, canvas.width, canvas.height);
+            
             ctx.save();
+            // Apply Camera
             ctx.translate(view.x, view.y);
             ctx.scale(view.scale, view.scale);
             
+            // Draw Image (High Quality)
+            ctx.imageSmoothingEnabled = true;
+            ctx.imageSmoothingQuality = 'high';
             ctx.drawImage(img, 0, 0);
             
             // Draw Strokes
-            // Dynamic Line Width: Stays readable regardless of zoom
-            ctx.lineWidth = 40 / view.scale; 
+            // Line width must scale inversely to view scale to stay constant on screen
+            ctx.lineWidth = brushSize / view.scale * (window.devicePixelRatio || 1); 
             ctx.lineCap = 'round';
             ctx.lineJoin = 'round';
             ctx.strokeStyle = '#000';
@@ -339,13 +342,14 @@
             ctx.restore();
         }
 
-        // --- TOUCH INPUT (FIXED) ---
+        // --- INPUT HANDLING (With Gesture Guard) ---
         const canvasEl = document.getElementById('canvas');
 
         function toWorld(tx, ty) {
+            const dpr = window.devicePixelRatio || 1;
             return {
-                x: (tx - view.x) / view.scale,
-                y: (ty - view.y) / view.scale
+                x: (tx * dpr - view.x) / view.scale,
+                y: (ty * dpr - view.y) / view.scale
             };
         }
 
@@ -353,39 +357,49 @@
             e.preventDefault();
             
             if(e.touches.length === 2) {
-                // PINCH DETECTED: CANCEL ANY CURRENT DRAWING
-                isDrawing = false;
-                currentStroke = []; // Delete the "dot" if finger 1 just touched down
-                
+                // PINCH START
                 isPinching = true;
-                lastPinchDist = getPinchDist(e);
+                isDrawing = false;
+                clearTimeout(drawTimeout); // Kill any pending drawing start
+                currentStroke = []; // Clear accidental dots
+                lastPinchDist = Math.hypot(
+                    e.touches[0].clientX - e.touches[1].clientX,
+                    e.touches[0].clientY - e.touches[1].clientY
+                );
                 lastTouch = {
                     x: (e.touches[0].clientX + e.touches[1].clientX)/2,
                     y: (e.touches[0].clientY + e.touches[1].clientY)/2
                 };
-                render(); // Re-render to remove the ghost dot
-            } else if (e.touches.length === 1 && !isPinching) {
-                // DRAW START
-                isDrawing = true;
+            } else if (e.touches.length === 1) {
+                // POTENTIAL DRAW START (Wait 50ms to ensure it's not a pinch)
+                const t = e.touches[0];
                 const rect = canvasEl.getBoundingClientRect();
-                const pt = toWorld(e.touches[0].clientX - rect.left, e.touches[0].clientY - rect.top);
-                currentStroke = [pt];
-                render();
+                const pt = toWorld(t.clientX - rect.left, t.clientY - rect.top);
+                
+                // Start tracking, but don't set isDrawing yet
+                currentStroke = [pt]; 
+                
+                drawTimeout = setTimeout(() => {
+                    if(!isPinching) isDrawing = true;
+                }, 70); 
             }
         }, {passive:false});
 
         canvasEl.addEventListener('touchmove', e => {
             e.preventDefault();
-            
             if(isPinching && e.touches.length === 2) {
                 // ZOOM/PAN
-                const dist = getPinchDist(e);
+                const dist = Math.hypot(
+                    e.touches[0].clientX - e.touches[1].clientX,
+                    e.touches[0].clientY - e.touches[1].clientY
+                );
                 const cx = (e.touches[0].clientX + e.touches[1].clientX)/2;
                 const cy = (e.touches[0].clientY + e.touches[1].clientY)/2;
                 
-                // Pan
-                view.x += (cx - lastTouch.x);
-                view.y += (cy - lastTouch.y);
+                // Pan (account for DPR)
+                const dpr = window.devicePixelRatio || 1;
+                view.x += (cx - lastTouch.x) * dpr;
+                view.y += (cy - lastTouch.y) * dpr;
                 lastTouch = {x:cx, y:cy};
 
                 // Zoom
@@ -397,38 +411,35 @@
                 render();
             } else if (isDrawing && e.touches.length === 1) {
                 // DRAW
+                const t = e.touches[0];
                 const rect = canvasEl.getBoundingClientRect();
-                const pt = toWorld(e.touches[0].clientX - rect.left, e.touches[0].clientY - rect.top);
+                const pt = toWorld(t.clientX - rect.left, t.clientY - rect.top);
                 currentStroke.push(pt);
                 render();
             }
         }, {passive:false});
 
-        canvasEl.addEventListener('touchend', e => {
-            if(e.touches.length < 2) isPinching = false;
-            
-            if(isDrawing && e.touches.length === 0) {
-                isDrawing = false;
-                if(currentStroke.length > 0) strokes.push(currentStroke);
-                currentStroke = [];
-                render();
+        canvasEl.addEventListener('touchend', () => {
+            if(isDrawing) {
+                strokes.push(currentStroke);
             }
+            isDrawing = false;
+            isPinching = false;
+            currentStroke = [];
+            clearTimeout(drawTimeout);
+            render();
         });
 
-        function getPinchDist(e) {
-            return Math.hypot(
-                e.touches[0].clientX - e.touches[1].clientX,
-                e.touches[0].clientY - e.touches[1].clientY
-            );
-        }
-
-        // --- BUTTONS ---
+        // --- TOOLS ---
         function zoomIn() { view.scale *= 1.2; render(); }
         function zoomOut() { view.scale *= 0.8; render(); }
-        function rotateImage() {
-            // Simple visual feedback
-            alert("Please rotate image in your gallery before uploading.");
+        
+        function setBrushSize(size, btn) {
+            brushSize = size * 2; // Multiplier for better feel
+            document.querySelectorAll('.size-btn').forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
         }
+        
         function undoLast() { strokes.pop(); render(); }
         function resetCanvas() { strokes = []; render(); }
 
@@ -438,25 +449,29 @@
             btn.innerHTML = "ENCRYPTING...";
             btn.disabled = true;
 
+            // Render Final Output (Full Resolution)
             const outCan = document.createElement('canvas');
             outCan.width = img.width;
             outCan.height = img.height;
             const ctx = outCan.getContext('2d');
             
-            // Draw original
             ctx.drawImage(img, 0, 0);
             
-            // Draw edits
+            // Draw all strokes
             ctx.lineCap = 'round';
             ctx.lineJoin = 'round';
             ctx.strokeStyle = '#000';
             
+            // Calculate scale ratio between Screen View and Real Image
+            // Actually, our strokes ARE in World (Image) coordinates already!
+            // So we just draw them 1:1.
+            
+            // However, we adjusted visual line width based on zoom.
+            // For the file, we want a fixed large size.
+            ctx.lineWidth = 45; // Thick redaction for the file
+
             strokes.forEach(stroke => {
                 if(stroke.length < 1) return;
-                // Calculate dynamic line width based on image size vs view
-                // We want 40px relative to visual, but mapped to real image size
-                // Simple assumption: 40px brush on image
-                ctx.lineWidth = 40; 
                 ctx.beginPath();
                 ctx.moveTo(stroke[0].x, stroke[0].y);
                 for(let i=1; i<stroke.length; i++) ctx.lineTo(stroke[i].x, stroke[i].y);

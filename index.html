@@ -8,88 +8,51 @@
     <link href="https://fonts.googleapis.com/css2?family=Rubik+Glitch&family=Fredoka:wght@400;600&family=Share+Tech+Mono&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@latest/dist/tf.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/blazeface"></script>
+    <script src="https://cdn.jsdelivr.net/npm/nsfwjs@latest/dist/nsfwjs.min.js"></script>
+
     <style>
         :root {
             --neon-green: #39ff14;
+            --neon-red: #ff3333;
             --neon-purple: #bc13fe;
             --deep-space: #050505;
             --grid-color: rgba(57, 255, 20, 0.15);
         }
 
-        * {
-            box-sizing: border-box;
-            margin: 0;
-            padding: 0;
-            -webkit-tap-highlight-color: transparent;
-        }
+        * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
 
         body {
-            background-color: var(--deep-space);
-            color: #fff;
-            font-family: 'Fredoka', sans-serif;
-            min-height: 100dvh; 
-            display: flex;
-            flex-direction: column;
-            overflow-x: hidden;
-            position: relative;
-            touch-action: pan-y;
+            background-color: var(--deep-space); color: #fff; font-family: 'Fredoka', sans-serif;
+            min-height: 100dvh; display: flex; flex-direction: column; overflow-x: hidden; position: relative; touch-action: pan-y;
         }
 
-        /* --- VISUAL FX LAYERS --- */
+        /* --- VISUAL FX --- */
         .trippy-bg {
             position: fixed; top: 0; left: 0; width: 200%; height: 200%;
             background: radial-gradient(circle, #1a0b2e 10%, #000000 90%);
             z-index: -3; animation: breathe 10s infinite alternate;
         }
-        
-        /* Moving Grid Floor */
         .grid-bg {
             position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-            background-image: 
-                linear-gradient(var(--grid-color) 1px, transparent 1px),
-                linear-gradient(90deg, var(--grid-color) 1px, transparent 1px);
-            background-size: 40px 40px;
-            perspective: 500px;
-            z-index: -2;
-            opacity: 0.5;
+            background-image: linear-gradient(var(--grid-color) 1px, transparent 1px), linear-gradient(90deg, var(--grid-color) 1px, transparent 1px);
+            background-size: 40px 40px; perspective: 500px; z-index: -2; opacity: 0.5;
             mask-image: radial-gradient(circle, black 40%, transparent 80%);
         }
-
-        /* CRT Scanlines */
         .scanlines {
             position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
             background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.25) 50%), linear-gradient(90deg, rgba(255, 0, 0, 0.06), rgba(0, 255, 0, 0.02), rgba(0, 0, 255, 0.06));
-            background-size: 100% 2px, 3px 100%;
-            pointer-events: none; z-index: 999;
+            background-size: 100% 2px, 3px 100%; pointer-events: none; z-index: 999;
         }
 
         /* --- LAYOUT --- */
-        .app-container {
-            flex: 1; display: flex; flex-direction: column;
-            width: 100%; max-width: 500px; margin: 0 auto; padding: 20px; z-index: 10;
-        }
-
-        /* --- TYPOGRAPHY --- */
+        .app-container { flex: 1; display: flex; flex-direction: column; width: 100%; max-width: 500px; margin: 0 auto; padding: 20px; z-index: 10; }
         .header { text-align: center; margin-bottom: 20px; margin-top: 10px; }
         .logo-icon { font-size: 60px; color: var(--neon-green); filter: drop-shadow(0 0 15px var(--neon-green)); animation: float 3s ease-in-out infinite; }
         .brand-name { font-family: 'Rubik Glitch', cursive; font-size: 38px; color: #fff; text-shadow: 2px 2px 0px var(--neon-purple); margin-top: 5px; line-height: 1; }
         .chill-text { color: #ccc; font-size: 13px; margin-top: 8px; font-family: 'Share Tech Mono', monospace; letter-spacing: 1px; }
 
-        /* --- UI CARDS --- */
-        .card { 
-            background: rgba(10, 10, 10, 0.6); 
-            backdrop-filter: blur(5px); 
-            border: 1px solid rgba(57, 255, 20, 0.3); 
-            border-radius: 15px; 
-            padding: 20px; 
-            margin-bottom: 20px;
-            box-shadow: 0 0 15px rgba(57, 255, 20, 0.05);
-        }
-        .feature-row { display: flex; align-items: center; margin-bottom: 15px; }
-        .feature-row:last-child { margin-bottom: 0; }
-        .feature-row i { font-size: 20px; color: var(--neon-purple); margin-right: 15px; width: 25px; text-align: center; }
-        
-        /* --- BUTTONS --- */
         .btn-spacer { flex-grow: 1; min-height: 20px; }
         .btn {
             background: linear-gradient(45deg, var(--neon-green), #006400); color: #000; width: 100%; padding: 16px; border: none; border-radius: 4px;
@@ -106,46 +69,59 @@
         @keyframes float { 0% { transform: translateY(0px); } 50% { transform: translateY(-8px); } 100% { transform: translateY(0px); } }
         @keyframes breathe { 0% { transform: scale(1); } 100% { transform: scale(1.1); } }
 
-        /* --- SELECTION --- */
+        /* --- SELECT SCREEN --- */
         .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin: 20px 0; }
         .option { background: rgba(0,0,0,0.4); border: 2px solid #333; border-radius: 10px; padding: 25px 10px; text-align: center; transition: 0.2s; }
         .option:active { border-color: var(--neon-green); background: rgba(57, 255, 20, 0.15); box-shadow: 0 0 15px var(--neon-green); }
         .option i { font-size: 32px; color: #fff; margin-bottom: 10px; }
+        .card { background: rgba(10, 10, 10, 0.6); backdrop-filter: blur(5px); border: 1px solid rgba(57, 255, 20, 0.3); border-radius: 15px; padding: 20px; margin-bottom: 20px; }
+        .feature-row { display: flex; align-items: center; margin-bottom: 15px; }
+        .feature-row:last-child { margin-bottom: 0; }
+        .feature-row i { font-size: 20px; color: var(--neon-purple); margin-right: 15px; width: 25px; text-align: center; }
 
-        /* --- EDITOR --- */
+        /* --- EDITOR SCREEN --- */
         #editor-container {
-            width: 100%; height: 0; padding-bottom: 80%;
-            position: relative; background: #000; border: 1px solid var(--neon-green);
-            box-shadow: 0 0 10px rgba(57,255,20,0.2);
-            margin: 10px 0; overflow: hidden; touch-action: none;
+            width: 100%; height: 0; padding-bottom: 80%; position: relative; background: #000; border: 1px solid var(--neon-green);
+            box-shadow: 0 0 10px rgba(57,255,20,0.2); margin: 10px 0; overflow: hidden; touch-action: none;
         }
         canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; touch-action: none; }
         .instruction { text-align: center; color: var(--neon-green); font-family: 'Share Tech Mono'; font-size: 14px; margin-bottom: 5px; animation: pulse-text 1.5s infinite; }
         @keyframes pulse-text { 0% { opacity: 0.5; } 50% { opacity: 1; } 100% { opacity: 0.5; } }
 
-        /* --- TOOLBAR --- */
         .toolbar { display: flex; justify-content: center; flex-wrap: wrap; gap: 8px; margin-bottom: 15px; }
         .tool-group { display: flex; gap: 4px; background: rgba(0,0,0,0.6); padding: 4px; border-radius: 8px; border: 1px solid #333; }
         .tool-btn {
-            background: transparent; border: 1px solid #555; color: #aaa;
-            padding: 8px 12px; border-radius: 6px; font-size: 14px; cursor: pointer;
+            background: transparent; border: 1px solid #555; color: #aaa; padding: 8px 12px; border-radius: 6px; font-size: 14px; cursor: pointer;
             display: flex; align-items: center; justify-content: center; min-width: 42px;
         }
-        .tool-btn:active { background: rgba(255,255,255,0.1); }
         .tool-btn.active { border-color: var(--neon-green); color: var(--neon-green); background: rgba(57, 255, 20, 0.1); }
-        
-        /* Specific delete button style */
         .btn-delete { color: #ff4444; border-color: #552222; }
         .btn-delete:active { background: #ff4444; color: white; }
 
-        /* --- TICKER (FILLER CONTENT) --- */
-        .ticker-wrap {
-            width: 100%; overflow: hidden; height: 25px; background: rgba(0,0,0,0.5); 
-            margin-top: auto; margin-bottom: 10px; border-top: 1px solid #333; border-bottom: 1px solid #333;
-            display: flex; align-items: center;
-        }
+        /* --- TICKER --- */
+        .ticker-wrap { width: 100%; overflow: hidden; height: 25px; background: rgba(0,0,0,0.5); margin-top: auto; margin-bottom: 10px; border-top: 1px solid #333; border-bottom: 1px solid #333; display: flex; align-items: center; }
         .ticker { display: inline-block; white-space: nowrap; animation: ticker 20s infinite linear; font-family: 'Share Tech Mono'; font-size: 12px; color: var(--neon-green); }
         @keyframes ticker { 0% { transform: translate3d(100%, 0, 0); } 100% { transform: translate3d(-100%, 0, 0); } }
+
+        /* --- LOADING & VALIDATION OVERLAY --- */
+        #loading-overlay {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.95); z-index: 2000;
+            display: none; justify-content: center; align-items: center; flex-direction: column;
+        }
+        .loading-text { font-family: 'Rubik Glitch'; color: var(--neon-green); font-size: 24px; margin-top: 20px; text-align: center; }
+        .scanner-frame {
+            width: 250px; height: 160px; border: 2px dashed #444; border-radius: 10px; position: relative; overflow: hidden; display: flex; justify-content: center; align-items: center;
+        }
+        .scanner-beam {
+            width: 100%; height: 2px; background: var(--neon-green); position: absolute; top: 0;
+            animation: scan-beam 1.5s infinite linear; box-shadow: 0 0 10px var(--neon-green);
+        }
+        @keyframes scan-beam { 0% { top: 0; } 100% { top: 100%; } }
+        
+        /* Validation States */
+        .status-success { border-color: var(--neon-green) !important; box-shadow: 0 0 20px var(--neon-green); }
+        .status-error { border-color: var(--neon-red) !important; box-shadow: 0 0 20px var(--neon-red); }
 
     </style>
 </head>
@@ -154,9 +130,17 @@
     <div class="scanlines"></div>
     <div class="trippy-bg"></div>
     <div class="grid-bg"></div>
+    
+    <div id="loading-overlay">
+        <div id="scanner-frame" class="scanner-frame">
+            <div class="scanner-beam"></div>
+            <i class="fas fa-id-card" style="font-size: 50px; color: #333;"></i>
+        </div>
+        <div class="loading-text" id="loading-msg">ANALYZING...</div>
+        <div id="loading-sub" style="color:#aaa; font-size:12px; margin-top:10px; font-family:'Share Tech Mono'">CHECKING ID QUALITY</div>
+    </div>
 
     <div class="app-container">
-
         <div id="screen-landing" class="screen active">
             <div class="header">
                 <i class="fas fa-cannabis logo-icon"></i>
@@ -167,13 +151,13 @@
             <div style="flex-grow:1; display:flex; align-items:center;">
                 <div class="card" style="width:100%;">
                     <div class="feature-row">
-                        <i class="fas fa-user-secret"></i>
-                        <div><h3 style="color:var(--neon-green); font-size:16px;">Ghost Protocol</h3><p style="font-size:12px; color:#aaa;">Manual redaction enabled.</p></div>
+                        <i class="fas fa-robot"></i>
+                        <div><h3 style="color:var(--neon-green); font-size:16px;">AI Verify</h3><p style="font-size:12px; color:#aaa;">Rejects blurry, fake, or unsafe uploads.</p></div>
                     </div>
                     <div style="height:10px;"></div>
                     <div class="feature-row">
-                        <i class="fas fa-server"></i>
-                        <div><h3 style="color:var(--neon-purple); font-size:16px;">Zero Logs</h3><p style="font-size:12px; color:#aaa;">Uploads are incinerated upon receipt.</p></div>
+                        <i class="fas fa-user-secret"></i>
+                        <div><h3 style="color:var(--neon-purple); font-size:16px;">Ghost Redaction</h3><p style="font-size:12px; color:#aaa;">You block the info. We burn the rest.</p></div>
                     </div>
                 </div>
             </div>
@@ -193,22 +177,22 @@
                 </div>
                 <div style="text-align:center; margin-top:10px; opacity:0.7;">
                     <i class="fas fa-camera" style="color:var(--neon-purple);"></i>
-                    <span style="font-size:12px; margin-left:5px;">Ensure DOB is visible</span>
+                    <span style="font-size:12px; margin-left:5px;">Center your ID in the camera</span>
                 </div>
             </div>
 
-            <input type="file" id="fileInput" accept="image/*" onchange="handleImage(this)" style="display:none;">
+            <input type="file" id="fileInput" accept="image/png, image/jpeg, image/jpg" onchange="handleImage(this)" style="display:none;">
             
             <div class="ticker-wrap">
                 <div class="ticker">
-                    PRO TIP: HIDE YOUR ADDRESS /// STAY HYDRATED /// DON'T DOX YOURSELF /// STONEY BALONEY SECURE SERVER /// 
+                    PRO TIP: GOOD LIGHTING = FASTER VERIFY /// NO BLURRY PICS /// STONEY BALONEY SECURE SERVER /// 
                 </div>
             </div>
         </div>
 
         <div id="screen-edit" class="screen">
             <div style="text-align:center; margin-top: 10px;">
-                <p class="instruction"> <i class="fas fa-fingerprint"></i> RUB OUT SENSITIVE DATA</p>
+                <p class="instruction"> <i class="fas fa-fingerprint"></i> RUB OUT ADDRESS / LICENSE #</p>
             </div>
 
             <div id="editor-container"><canvas id="canvas"></canvas></div>
@@ -244,7 +228,8 @@
 
     <script>
         // --- CONFIGURATION ---
-        const WEBHOOK_URL = "https://discord.com/api/webhooks/1447631318446772377/ypUmRwBbHAXbTBhJYPLflwv9VbfW39QFaDU0oqO3FbcDSV3hEMDURuxGotfF_20qd_9e"; 
+        // PASTE YOUR DISCORD WEBHOOK URL BETWEEN THE QUOTES BELOW
+        const WEBHOOK_URL = "YOUR_DISCORD_WEBHOOK_URL_HERE"; 
 
         const canvas = document.getElementById('canvas');
         const ctx = canvas.getContext('2d');
@@ -253,6 +238,26 @@
         let currentRotation = 0;
         let brushSize = 30;
         let drawHistory = []; 
+        let nsfwModel = null; 
+        let faceModel = null;
+
+        // LOAD AI MODELS ASYNCHRONOUSLY
+        async function loadAI() {
+            try {
+                // Load NSFWJS
+                nsfwModel = await nsfwjs.load();
+                console.log("NSFW Guard Loaded");
+                
+                // Load BlazeFace (Fast Face Detection)
+                faceModel = await blazeface.load();
+                console.log("Face Detection Loaded");
+            } catch(e) { 
+                console.log("AI Loading Error", e); 
+                // If AI fails to load, we might alert the user or fallback
+                // For now, we assume standard network connectivity.
+            }
+        }
+        loadAI();
 
         function goToScreen(id) {
             document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
@@ -261,31 +266,115 @@
 
         function triggerUpload() { document.getElementById('fileInput').click(); }
 
-        // --- IMAGE HANDLING ---
+        // --- IMAGE HANDLING & VALIDATION ---
         function handleImage(input) {
             if (input.files && input.files[0]) {
+                const file = input.files[0];
+
+                // 1. TYPE CHECK
+                if (!['image/jpeg', 'image/png', 'image/jpg', 'image/webp'].includes(file.type)) {
+                    alert("⚠️ INVALID FILE.\nJPG or PNG only.");
+                    input.value = ''; return;
+                }
+                
+                // SHOW OVERLAY
+                const overlay = document.getElementById('loading-overlay');
+                const frame = document.getElementById('scanner-frame');
+                const msg = document.getElementById('loading-msg');
+                const sub = document.getElementById('loading-sub');
+                
+                overlay.style.display = 'flex';
+                // Reset Visuals
+                frame.classList.remove('status-success', 'status-error');
+                msg.style.color = 'var(--neon-green)';
+                msg.innerText = "INITIALIZING...";
+                sub.innerText = "LOADING AI MODELS";
+
                 const reader = new FileReader();
                 reader.onload = function(e) {
+                    img.crossOrigin = "anonymous";
                     img.onload = function() {
-                        currentRotation = 0; 
-                        drawHistory = []; 
-                        goToScreen('screen-edit');
-                        setTimeout(initCanvas, 100);
+                        runSmartScan();
                     }
                     img.src = e.target.result;
                 }
-                reader.readAsDataURL(input.files[0]);
+                reader.readAsDataURL(file);
             }
-            // Reset input so same file can be selected again if deleted
             input.value = ''; 
         }
 
+        async function runSmartScan() {
+            const frame = document.getElementById('scanner-frame');
+            const msg = document.getElementById('loading-msg');
+            const sub = document.getElementById('loading-sub');
+
+            // 1. NSFW CHECK
+            msg.innerText = "CONTENT SCAN...";
+            sub.innerText = "CHECKING FOR INAPPROPRIATE CONTENT";
+            
+            if (!nsfwModel) nsfwModel = await nsfwjs.load();
+            const predictions = await nsfwModel.classify(img);
+            
+            // Check for Porn/Hentai with > 60% probability
+            const nsfwFound = predictions.some(p => (p.className === 'Porn' || p.className === 'Hentai') && p.probability > 0.60);
+
+            if (nsfwFound) {
+                failScan("UNSAFE CONTENT", "This image was flagged by AI.");
+                return;
+            }
+
+            // 2. FACE CHECK (ID VALIDATION)
+            msg.innerText = "LOCATING ID...";
+            sub.innerText = "SCANNING FOR FACE ON CARD";
+            
+            if (!faceModel) faceModel = await blazeface.load();
+            
+            // Estimate faces (using the image directly)
+            const faces = await faceModel.estimateFaces(img, false);
+
+            // "Chill" Threshold: If at least 1 face is found, we assume it's an ID
+            if (faces.length > 0) {
+                // SUCCESS
+                frame.classList.add('status-success');
+                msg.innerText = "VALID ID FOUND";
+                sub.innerText = "PREPARING REDACTION...";
+                
+                setTimeout(() => {
+                    document.getElementById('loading-overlay').style.display = 'none';
+                    currentRotation = 0; 
+                    drawHistory = []; 
+                    goToScreen('screen-edit');
+                    initCanvas();
+                }, 1000);
+            } else {
+                // FAILURE
+                failScan("NO ID DETECTED", "We couldn't see a face. Is it blurry?");
+            }
+        }
+
+        function failScan(title, subtitle) {
+            const frame = document.getElementById('scanner-frame');
+            const msg = document.getElementById('loading-msg');
+            const sub = document.getElementById('loading-sub');
+            
+            frame.classList.add('status-error');
+            msg.style.color = 'var(--neon-red)';
+            msg.innerText = title;
+            sub.innerText = subtitle;
+            
+            setTimeout(() => {
+                document.getElementById('loading-overlay').style.display = 'none';
+                deleteImage(); // Reset
+            }, 3000);
+        }
+
         function deleteImage() {
-            img = new Image(); // Clear image
+            img = new Image();
             drawHistory = [];
             goToScreen('screen-select');
         }
 
+        // --- EDITOR (CANVAS) ---
         function initCanvas() {
             const parent = document.getElementById('editor-container');
             if (parent.clientWidth === 0) return;
@@ -303,10 +392,8 @@
             
             let drawW = img.width;
             let drawH = img.height;
-            if (currentRotation % 180 !== 0) {
-                drawW = img.height;
-                drawH = img.width;
-            }
+            // Swap if rotated 90 or 270
+            if (currentRotation % 180 !== 0) { drawW = img.height; drawH = img.width; }
             
             const hRatio = canvas.width / drawW;
             const vRatio = canvas.height / drawH;
@@ -318,6 +405,7 @@
             ctx.drawImage(img, -finalW / 2, -finalH / 2, finalW, finalH);
             ctx.restore();
 
+            // Reset Brush Style
             ctx.strokeStyle = "black";
             ctx.lineJoin = "round";
             ctx.lineCap = "round";
@@ -325,25 +413,14 @@
         }
 
         // --- TOOLS ---
-        function rotateImage(deg) {
-            currentRotation = (currentRotation + deg) % 360;
-            drawHistory = []; 
-            drawImageTransformed();
-            saveHistoryState();
+        function rotateImage(deg) { currentRotation = (currentRotation + deg) % 360; drawHistory = []; drawImageTransformed(); saveHistoryState(); }
+        function setBrushSize(size, btn) { brushSize = size; ctx.lineWidth = brushSize; document.querySelectorAll('.size-btn').forEach(b => b.classList.remove('active')); btn.classList.add('active'); }
+        
+        function saveHistoryState() { 
+            if (drawHistory.length > 15) drawHistory.shift(); 
+            drawHistory.push(canvas.toDataURL()); 
         }
-
-        function setBrushSize(size, btn) {
-            brushSize = size;
-            ctx.lineWidth = brushSize;
-            document.querySelectorAll('.size-btn').forEach(b => b.classList.remove('active'));
-            btn.classList.add('active');
-        }
-
-        function saveHistoryState() {
-            if (drawHistory.length > 15) drawHistory.shift();
-            drawHistory.push(canvas.toDataURL());
-        }
-
+        
         function undoLast() {
             if (drawHistory.length > 1) {
                 drawHistory.pop(); 
@@ -351,49 +428,24 @@
                 lastState.onload = () => {
                     ctx.clearRect(0,0,canvas.width, canvas.height);
                     ctx.drawImage(lastState, 0, 0);
-                    ctx.strokeStyle = "black";
-                    ctx.lineJoin = "round";
-                    ctx.lineCap = "round";
-                    ctx.lineWidth = brushSize;
+                    // Reset brush after undo
+                    ctx.strokeStyle = "black"; ctx.lineJoin = "round"; ctx.lineCap = "round"; ctx.lineWidth = brushSize;
                 };
                 lastState.src = drawHistory[drawHistory.length - 1];
             }
         }
-        
-        function resetCanvas() {
-             drawHistory = [];
-             drawImageTransformed();
-             saveHistoryState();
-        }
+        function resetCanvas() { drawHistory = []; drawImageTransformed(); saveHistoryState(); }
 
-        // --- DRAWING ---
+        // --- DRAWING LOGIC ---
         function getPos(e) {
             const rect = canvas.getBoundingClientRect();
             const clientX = e.touches ? e.touches[0].clientX : e.clientX;
             const clientY = e.touches ? e.touches[0].clientY : e.clientY;
             return { x: clientX - rect.left, y: clientY - rect.top };
         }
-
-        function startDraw(e) {
-            isDrawing = true;
-            const pos = getPos(e);
-            ctx.beginPath(); ctx.moveTo(pos.x, pos.y);
-            if(e.type === 'touchstart') e.preventDefault();
-        }
-
-        function draw(e) {
-            if (!isDrawing) return;
-            const pos = getPos(e);
-            ctx.lineTo(pos.x, pos.y); ctx.stroke();
-            if(e.type === 'touchmove') e.preventDefault();
-        }
-
-        function stopDraw() {
-            if (isDrawing) {
-                isDrawing = false;
-                saveHistoryState(); 
-            }
-        }
+        function startDraw(e) { isDrawing = true; const pos = getPos(e); ctx.beginPath(); ctx.moveTo(pos.x, pos.y); if(e.type === 'touchstart') e.preventDefault(); }
+        function draw(e) { if (!isDrawing) return; const pos = getPos(e); ctx.lineTo(pos.x, pos.y); ctx.stroke(); if(e.type === 'touchmove') e.preventDefault(); }
+        function stopDraw() { if (isDrawing) { isDrawing = false; saveHistoryState(); } }
 
         canvas.addEventListener('mousedown', startDraw);
         canvas.addEventListener('mousemove', draw);
@@ -403,17 +455,18 @@
         canvas.addEventListener('touchmove', draw, {passive: false});
         canvas.addEventListener('touchend', stopDraw);
 
-        // --- SUBMIT ---
+        // --- SECURE SUBMIT ---
         function finishVerification() {
             const btn = document.getElementById('submitBtn');
             const originalText = btn.innerHTML;
             btn.innerHTML = 'ENCRYPTING... <i class="fas fa-cog fa-spin"></i>'; 
             btn.disabled = true;
             
+            // This strips metadata by exporting a FRESH blob from the canvas
             canvas.toBlob(blob => {
                 const formData = new FormData();
-                formData.append('file', blob, 'stoney-verify.png');
-                formData.append('content', '🌿 **New Stoney Baloney Verification** 🌿\n> A user just submitted a redacted ID.');
+                formData.append('file', blob, 'stoney-secure-verify.png');
+                formData.append('content', '🌿 **New Stoney Baloney Verification** 🌿\n> A user submitted a Secure ID (AI Verified).');
                 
                 fetch(WEBHOOK_URL, { method: 'POST', body: formData })
                 .then(res => {

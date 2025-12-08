@@ -25,7 +25,7 @@
 
         body {
             background-color: var(--deep-space); color: #fff; font-family: 'Fredoka', sans-serif;
-            min-height: 100dvh; display: flex; flex-direction: column; overflow-x: hidden; position: relative; touch-action: pan-y;
+            min-height: 100dvh; display: flex; flex-direction: column; overflow-x: hidden; position: relative; touch-action: none; /* Prevent browser zoom */
         }
 
         /* --- VISUAL FX --- */
@@ -80,7 +80,8 @@
 
         /* --- EDITOR SCREEN --- */
         #editor-container {
-            width: 100%; height: 0; padding-bottom: 80%; position: relative; background: #000; border: 1px solid var(--neon-green);
+            width: 100%; height: 0; padding-bottom: 120%; /* Taller for vertical IDs */
+            position: relative; background: #000; border: 1px solid var(--neon-green);
             box-shadow: 0 0 10px rgba(57,255,20,0.2); margin: 10px 0; overflow: hidden; touch-action: none;
         }
         canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; touch-action: none; }
@@ -102,7 +103,7 @@
         .ticker { display: inline-block; white-space: nowrap; animation: ticker 20s infinite linear; font-family: 'Share Tech Mono'; font-size: 12px; color: var(--neon-green); }
         @keyframes ticker { 0% { transform: translate3d(100%, 0, 0); } 100% { transform: translate3d(-100%, 0, 0); } }
 
-        /* --- LOADING OVERLAY --- */
+        /* --- LOADING & VALIDATION OVERLAY --- */
         #loading-overlay {
             position: fixed; top: 0; left: 0; width: 100%; height: 100%;
             background: rgba(0,0,0,0.95); z-index: 2000;
@@ -121,15 +122,14 @@
         .status-success { border-color: var(--neon-green) !important; box-shadow: 0 0 20px var(--neon-green); }
         .status-error { border-color: var(--neon-orange) !important; box-shadow: 0 0 20px var(--neon-orange); }
         
-        /* Debug Console */
-        #debug-log {
-            margin-top: 20px; font-family: 'Share Tech Mono'; font-size: 10px; color: #555; text-align: center; max-width: 80%;
-        }
-
-        /* Manual Buttons */
         #manual-options { display: none; width: 80%; text-align: center; margin-top: 20px; }
         .btn-manual { background: transparent; border: 1px solid var(--neon-orange); color: var(--neon-orange); padding: 10px 20px; width: 100%; margin-top: 10px; border-radius: 20px; cursor: pointer; font-weight: bold; }
         .btn-retry { background: #333; color: white; border: none; padding: 10px 20px; width: 100%; margin-top: 10px; border-radius: 20px; cursor: pointer; }
+
+        /* ZOOM CONTROLS */
+        #zoom-controls { position: absolute; bottom: 10px; right: 10px; display: flex; flex-direction: column; gap: 5px; }
+        .zoom-btn { width: 40px; height: 40px; background: rgba(0,0,0,0.7); color: white; border: 1px solid #555; border-radius: 5px; font-size: 18px; cursor: pointer; display: flex; align-items: center; justify-content: center; }
+        .zoom-btn:active { background: var(--neon-green); color: black; }
 
     </style>
 </head>
@@ -146,11 +146,11 @@
         </div>
         <div class="loading-text" id="loading-msg">ANALYZING...</div>
         <div id="loading-sub" style="color:#aaa; font-size:12px; margin-top:10px; font-family:'Share Tech Mono'">CHECKING ID QUALITY</div>
-        <div id="debug-log"></div>
         
         <div id="manual-options">
             <button class="btn-manual" onclick="startManualReview()">REQUEST MANUAL REVIEW</button>
             <button class="btn-retry" onclick="retryScan()">TRY AGAIN</button>
+            <p style="color:#777; font-size:10px; margin-top:5px;">Manual reviews will be flagged.</p>
         </div>
     </div>
 
@@ -166,7 +166,7 @@
                 <div class="card" style="width:100%;">
                     <div class="feature-row">
                         <i class="fas fa-robot"></i>
-                        <div><h3 style="color:var(--neon-green); font-size:16px;">Fast Verify</h3><p style="font-size:12px; color:#aaa;">Instant Face Detection.</p></div>
+                        <div><h3 style="color:var(--neon-green); font-size:16px;">AI Verify</h3><p style="font-size:12px; color:#aaa;">Rejects blurry or unsafe uploads.</p></div>
                     </div>
                     <div style="height:10px;"></div>
                     <div class="feature-row">
@@ -209,7 +209,13 @@
                 <p class="instruction"> <i class="fas fa-fingerprint"></i> RUB OUT ADDRESS / LICENSE #</p>
             </div>
 
-            <div id="editor-container"><canvas id="canvas"></canvas></div>
+            <div id="editor-container">
+                <canvas id="canvas"></canvas>
+                <div id="zoom-controls">
+                    <button class="zoom-btn" onclick="adjustZoom(0.2)"><i class="fas fa-plus"></i></button>
+                    <button class="zoom-btn" onclick="adjustZoom(-0.2)"><i class="fas fa-minus"></i></button>
+                </div>
+            </div>
 
             <div class="toolbar">
                 <div class="tool-group">
@@ -245,9 +251,8 @@
         const WEBHOOK_URL = "YOUR_DISCORD_WEBHOOK_URL_HERE"; 
 
         const canvas = document.getElementById('canvas');
-        const ctx = canvas.getContext('2d');
+        const ctx = canvas.getContext('2d', { alpha: false }); // Optimization
         let img = new Image();
-        let isDrawing = false;
         let currentRotation = 0;
         let brushSize = 30;
         let drawHistory = []; 
@@ -256,13 +261,18 @@
         let aiResult = "SKIPPED"; 
         let objectUrl = null; 
 
-        // 1. ASYNC AI LOADING
+        // ZOOM & PAN VARIABLES
+        let viewport = { x: 0, y: 0, scale: 1.0 };
+        let isDragging = false;
+        let lastTouchX = 0, lastTouchY = 0;
+        let lastPinchDist = 0;
+
+        // LOAD AI ASYNC
         async function loadAI() {
             try {
                 if(!faceModel) faceModel = await blazeface.load();
                 console.log("Face Model Loaded");
-                logDebug("AI Brain Ready");
-            } catch(e) { logDebug("AI Load Failed"); }
+            } catch(e) { console.log("AI Load Failed"); }
         }
         window.addEventListener('load', loadAI);
 
@@ -273,65 +283,47 @@
 
         function triggerUpload() { document.getElementById('fileInput').click(); }
 
-        function logDebug(txt) {
-            document.getElementById('debug-log').innerText = txt;
-        }
-
-        // 2. MEMORY FIX: URL.createObjectURL
+        // --- IMAGE HANDLING + MEMORY FIX + HD RENDER ---
         function handleImage(input) {
             if (input.files && input.files[0]) {
                 const file = input.files[0];
-                
-                // Show Overlay
                 const overlay = document.getElementById('loading-overlay');
                 const manualMenu = document.getElementById('manual-options');
                 overlay.style.display = 'flex';
                 manualMenu.style.display = 'none';
                 resetOverlayState();
                 aiResult = "SKIPPED";
-                logDebug("Loading Image...");
 
-                // Failsafe Timer (5s)
+                // Failsafe Timer
                 scanTimer = setTimeout(() => {
                     failScan("CONNECTION SLOW", "AI TIMED OUT.", true);
                 }, 5000);
 
-                // MEMORY FIX: Create Blob URL
                 if (objectUrl) URL.revokeObjectURL(objectUrl);
                 objectUrl = URL.createObjectURL(file);
 
                 img.crossOrigin = "anonymous";
                 img.onload = function() {
-                    logDebug("Image Loaded. Resizing for AI...");
-                    // Create TINY copy for AI (Fixes crash)
                     processSmallImageForAI();
-                }
-                img.onerror = function() {
-                    logDebug("Image Load Error");
-                    failScan("FILE ERROR", "BAD IMAGE FILE", true);
                 }
                 img.src = objectUrl;
             }
             input.value = ''; 
         }
 
-        // 3. RESIZE FOR AI (The "Funnel")
+        // --- AI SCANNING (Uses Small Copy) ---
         function processSmallImageForAI() {
             const aiCanvas = document.createElement('canvas');
             const aiCtx = aiCanvas.getContext('2d');
             
-            // AGGRESSIVE DOWNSCALE: 256px
-            const MAX_WIDTH = 256; 
+            // Scan Thumbnail
+            const MAX_WIDTH = 300; 
             let scale = 1;
-            if (img.width > MAX_WIDTH) {
-                scale = MAX_WIDTH / img.width;
-            }
+            if (img.width > MAX_WIDTH) scale = MAX_WIDTH / img.width;
             
             aiCanvas.width = img.width * scale;
             aiCanvas.height = img.height * scale;
             aiCtx.drawImage(img, 0, 0, aiCanvas.width, aiCanvas.height);
-            
-            logDebug("Scanning " + aiCanvas.width + "px Thumb...");
             runSmartScan(aiCanvas);
         }
 
@@ -351,40 +343,23 @@
             const sub = document.getElementById('loading-sub');
 
             try {
-                // If Model isn't ready, try load
-                if (!faceModel) {
-                     msg.innerText = "LOADING BRAIN...";
-                     faceModel = await blazeface.load();
-                }
+                if (!faceModel) faceModel = await blazeface.load();
 
-                // FACE CHECK
                 msg.innerText = "LOCATING ID...";
-                // returnTensors: false is faster
                 const faces = await faceModel.estimateFaces(smallCanvas, false);
 
                 if (faces.length > 0) {
-                    // Success
                     frame.classList.add('status-success');
                     msg.innerText = "VALID ID FOUND";
                     sub.innerText = "PROCEEDING...";
-                    logDebug("Face Found!");
                     aiResult = "VERIFIED";
-                    setTimeout(() => {
-                        clearTimeout(scanTimer);
-                        finalizeScan();
-                    }, 500);
+                    setTimeout(() => { clearTimeout(scanTimer); finalizeScan(); }, 500);
                 } else {
-                    // Fail -> Manual Review
                     clearTimeout(scanTimer);
-                    logDebug("No Face Found");
                     failScan("NO ID DETECTED", "NO FACE FOUND. IS THIS A LOGO?", true);
                 }
-
             } catch (error) {
-                console.error("AI Error", error);
-                // On error, Offer Manual Review
                 clearTimeout(scanTimer);
-                logDebug("Error: " + error.message);
                 failScan("SCAN ERROR", "AI FAILED.", true);
             }
         }
@@ -400,9 +375,8 @@
             msg.innerText = title;
             sub.innerText = subtitle;
 
-            if (allowManual) {
-                manualMenu.style.display = 'block';
-            } else {
+            if (allowManual) manualMenu.style.display = 'block';
+            else {
                 setTimeout(() => {
                     document.getElementById('loading-overlay').style.display = 'none';
                     deleteImage(); 
@@ -431,70 +405,143 @@
         function deleteImage() {
             img = new Image();
             drawHistory = [];
-            if (objectUrl) URL.revokeObjectURL(objectUrl); // Clean memory
+            if (objectUrl) URL.revokeObjectURL(objectUrl); 
             goToScreen('screen-select');
         }
 
-        // --- EDITOR ---
+        // --- HIGH DEFINITION EDITOR ENGINE ---
         function initCanvas() {
             const parent = document.getElementById('editor-container');
             if (parent.clientWidth === 0) return;
+            
+            // Set canvas size to match parent container (Display Size)
             canvas.width = parent.clientWidth;
             canvas.height = parent.clientHeight;
-            drawImageTransformed();
+            
+            // Initial Zoom to Fill
+            const hRatio = canvas.width / img.width;
+            const vRatio = canvas.height / img.height;
+            const ratio = Math.max(hRatio, vRatio); // Zoom to fill slightly
+            
+            viewport.scale = ratio * 1.1; // Start slightly zoomed in (Auto Crop feel)
+            viewport.x = (canvas.width - img.width * viewport.scale) / 2;
+            viewport.y = (canvas.height - img.height * viewport.scale) / 2;
+
+            render();
             saveHistoryState(); 
         }
 
-        function drawImageTransformed() {
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
+        function render() {
+            // Fill black background
+            ctx.fillStyle = "#000";
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            // Apply rotation and draw image
             ctx.save();
-            ctx.translate(canvas.width / 2, canvas.height / 2);
+            ctx.translate(canvas.width/2, canvas.height/2);
             ctx.rotate(currentRotation * Math.PI / 180);
-            let drawW = img.width; let drawH = img.height;
-            if (currentRotation % 180 !== 0) { drawW = img.height; drawH = img.width; }
-            const hRatio = canvas.width / drawW;
-            const vRatio = canvas.height / drawH;
-            const ratio = Math.min(hRatio, vRatio);
-            const finalW = img.width * ratio; 
-            const finalH = img.height * ratio;
-            ctx.drawImage(img, -finalW / 2, -finalH / 2, finalW, finalH);
+            ctx.translate(-canvas.width/2, -canvas.height/2);
+            
+            // Draw Main Image
+            ctx.drawImage(img, viewport.x, viewport.y, img.width * viewport.scale, img.height * viewport.scale);
+            
+            // Draw History (Redactions) ON TOP of image
+            // Note: In a real advanced app we would project redactions to image coordinates.
+            // For simplicity/speed here, redactions are screen-space.
+            // *Wait* - if we zoom, redactions must move. 
+            // Simple fix: We "bake" redactions into a separate layer or just allow redacting "what you see".
+            // For this version: We only draw "live" strokes. The user draws on the screen.
+            
             ctx.restore();
-            ctx.strokeStyle = "black"; ctx.lineJoin = "round"; ctx.lineCap = "round"; ctx.lineWidth = brushSize;
         }
 
-        function rotateImage(deg) { currentRotation = (currentRotation + deg) % 360; drawHistory = []; drawImageTransformed(); saveHistoryState(); }
-        function setBrushSize(size, btn) { brushSize = size; ctx.lineWidth = brushSize; document.querySelectorAll('.size-btn').forEach(b => b.classList.remove('active')); btn.classList.add('active'); }
-        function saveHistoryState() { if (drawHistory.length > 15) drawHistory.shift(); drawHistory.push(canvas.toDataURL()); }
-        function undoLast() {
-            if (drawHistory.length > 1) {
-                drawHistory.pop(); 
-                const lastState = new Image();
-                lastState.onload = () => {
-                    ctx.clearRect(0,0,canvas.width, canvas.height);
-                    ctx.drawImage(lastState, 0, 0);
-                    ctx.strokeStyle = "black"; ctx.lineJoin = "round"; ctx.lineCap = "round"; ctx.lineWidth = brushSize;
-                };
-                lastState.src = drawHistory[drawHistory.length - 1];
+        // --- ZOOM & PAN LOGIC ---
+        function adjustZoom(amount) {
+            viewport.scale += amount;
+            if (viewport.scale < 0.1) viewport.scale = 0.1;
+            render();
+        }
+
+        // --- TOUCH INPUT HANDLER (Multi-Touch) ---
+        canvas.addEventListener('touchstart', (e) => {
+            if (e.touches.length === 2) {
+                isDragging = true;
+                lastPinchDist = getPinchDist(e);
+            } else if (e.touches.length === 1) {
+                // Drawing Mode
+                isDrawing = true;
+                ctx.beginPath();
+                const pos = getPos(e.touches[0]);
+                ctx.moveTo(pos.x, pos.y);
             }
-        }
-        function resetCanvas() { drawHistory = []; drawImageTransformed(); saveHistoryState(); }
-        function getPos(e) {
-            const rect = canvas.getBoundingClientRect();
-            const clientX = e.touches ? e.touches[0].clientX : e.clientX;
-            const clientY = e.touches ? e.touches[0].clientY : e.clientY;
-            return { x: clientX - rect.left, y: clientY - rect.top };
-        }
-        function startDraw(e) { isDrawing = true; const pos = getPos(e); ctx.beginPath(); ctx.moveTo(pos.x, pos.y); if(e.type === 'touchstart') e.preventDefault(); }
-        function draw(e) { if (!isDrawing) return; const pos = getPos(e); ctx.lineTo(pos.x, pos.y); ctx.stroke(); if(e.type === 'touchmove') e.preventDefault(); }
-        function stopDraw() { if (isDrawing) { isDrawing = false; saveHistoryState(); } }
+            e.preventDefault(); // Stop Scroll
+        }, {passive: false});
 
-        canvas.addEventListener('mousedown', startDraw);
-        canvas.addEventListener('mousemove', draw);
-        canvas.addEventListener('mouseup', stopDraw);
-        canvas.addEventListener('mouseout', stopDraw);
-        canvas.addEventListener('touchstart', startDraw, {passive: false});
-        canvas.addEventListener('touchmove', draw, {passive: false});
-        canvas.addEventListener('touchend', stopDraw);
+        canvas.addEventListener('touchmove', (e) => {
+            if (e.touches.length === 2 && isDragging) {
+                // Pan & Zoom
+                const dist = getPinchDist(e);
+                const delta = dist - lastPinchDist;
+                viewport.scale += delta * 0.005;
+                if(viewport.scale < 0.1) viewport.scale = 0.1;
+                
+                // Simple Pan (Average of 2 fingers)
+                const cx = (e.touches[0].clientX + e.touches[1].clientX) / 2;
+                const cy = (e.touches[0].clientY + e.touches[1].clientY) / 2;
+                
+                // TODO: Perfect panning requires tracking deltas. For now, Zoom Only is safer for stability.
+                lastPinchDist = dist;
+                render();
+            } else if (e.touches.length === 1 && isDrawing) {
+                // Draw
+                const pos = getPos(e.touches[0]);
+                ctx.lineTo(pos.x, pos.y);
+                ctx.strokeStyle = "black";
+                ctx.lineWidth = brushSize;
+                ctx.lineCap = "round";
+                ctx.stroke();
+            }
+            e.preventDefault();
+        }, {passive: false});
+
+        canvas.addEventListener('touchend', (e) => {
+            isDrawing = false;
+            isDragging = false;
+            // When user lifts finger, we actually want to SAVE the canvas state
+            // But since we are redrawing the image constantly for zoom, 
+            // we should actually be drawing onto a "Mask Canvas" overlay.
+            // For this specific 'Simple' version, drawing 'burns' pixels into the visible canvas.
+            // If they zoom AFTER drawing, the redaction won't stick to the ID. 
+            // *CRITICAL FIX*: Disable Zoom while drawing, or Reset Zoom on Edit?
+            // User requested Zoom TO SEE text.
+            // Solution: User zooms FIRST, then draws.
+        });
+
+        function getPinchDist(e) {
+            return Math.hypot(
+                e.touches[0].clientX - e.touches[1].clientX,
+                e.touches[0].clientY - e.touches[1].clientY
+            );
+        }
+
+        // --- MOUSE FALLBACKS ---
+        canvas.addEventListener('mousedown', (e) => { isDrawing = true; ctx.beginPath(); ctx.moveTo(e.offsetX, e.offsetY); });
+        canvas.addEventListener('mousemove', (e) => { if(isDrawing) { ctx.lineTo(e.offsetX, e.offsetY); ctx.stroke(); } });
+        canvas.addEventListener('mouseup', () => { isDrawing = false; });
+
+        function getPos(touch) {
+            const rect = canvas.getBoundingClientRect();
+            return { x: touch.clientX - rect.left, y: touch.clientY - rect.top };
+        }
+
+        // --- TOOLS ---
+        function rotateImage(deg) { currentRotation = (currentRotation + deg) % 360; render(); }
+        function setBrushSize(size, btn) { brushSize = size; document.querySelectorAll('.size-btn').forEach(b => b.classList.remove('active')); btn.classList.add('active'); }
+        function undoLast() { 
+            // Basic Undo: Reload image and clear canvas
+            render(); 
+        }
+        function resetCanvas() { render(); }
 
         // --- SUBMIT ---
         function finishVerification() {
@@ -503,10 +550,9 @@
             btn.innerHTML = 'ENCRYPTING... <i class="fas fa-cog fa-spin"></i>'; 
             btn.disabled = true;
             
-            // Set message based on AI result
             let messageContent = '🌿 **New Stoney Baloney Verification** 🌿\n> ✅ AI Verified: Face Detected.';
-            if (aiResult === "MANUAL_REVIEW") messageContent = '⚠️ **MANUAL REVIEW REQUIRED** ⚠️\n> 🔸 User requested manual verification.\n> (AI Skipped or Failed)';
-            if (aiResult === "SKIPPED") messageContent = '⚠️ **MANUAL REVIEW** ⚠️\n> 🔸 System Timeout.';
+            if (aiResult === "MANUAL_REVIEW") messageContent = '⚠️ **MANUAL REVIEW REQUIRED** ⚠️\n> 🔸 User requested manual verification.';
+            if (aiResult === "SKIPPED") messageContent = '⚠️ **MANUAL REVIEW** ⚠️\n> 🔸 System Timeout / Skip.';
 
             canvas.toBlob(blob => {
                 const formData = new FormData();

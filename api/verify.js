@@ -1,17 +1,7 @@
 const { createClient } = require("@supabase/supabase-js");
 const formidable = require("formidable");
-const FormData = require("form-data");
 const fs = require("fs");
 
-// ✅ Ensure fetch exists everywhere (Vercel usually has it, but this prevents surprises)
-let fetchFn = global.fetch;
-try {
-  if (!fetchFn) fetchFn = require("node-fetch");
-} catch (_) {
-  // if node-fetch isn't installed, and global fetch doesn't exist, you'll get a clear error below
-}
-
-// ---- CORS (safe defaults for now) ----
 function setCors(req, res) {
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
@@ -21,33 +11,25 @@ function setCors(req, res) {
 module.exports = async function handler(req, res) {
   setCors(req, res);
 
-  // Preflight
   if (req.method === "OPTIONS") return res.status(204).end();
-
-  // Only POST
-  if (req.method !== "POST") {
-    return res.status(405).json({ error: "Method not allowed" });
-  }
+  if (req.method !== "POST") return res.status(405).json({ error: "Method not allowed" });
 
   const supabaseUrl = process.env.SUPABASE_URL;
   const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-
   if (!supabaseUrl || !serviceRoleKey) {
     return res.status(500).json({ error: "Server missing Supabase env vars" });
-  }
-
-  if (!fetchFn) {
-    return res.status(500).json({
-      error: "Server missing fetch()",
-      details: "Install node-fetch or use a runtime that provides global fetch.",
-    });
   }
 
   const supabase = createClient(supabaseUrl, serviceRoleKey, {
     auth: { persistSession: false },
   });
 
-  const form = formidable({ multiples: false, keepExtensions: true });
+  // IMPORTANT on serverless: use /tmp
+  const form = formidable({
+    multiples: false,
+    keepExtensions: true,
+    uploadDir: "/tmp",
+  });
 
   form.parse(req, async (err, fields, files) => {
     let tempPath = null;
@@ -72,8 +54,6 @@ module.exports = async function handler(req, res) {
         .single();
 
       if (readErr || !row) return res.status(400).json({ error: "Invalid token" });
-
-      // IMPORTANT: used=true means DECIDED (approve/deny) not uploaded
       if (row.used) return res.status(400).json({ error: "Token already decided" });
 
       // 2) Expiry check
@@ -84,11 +64,17 @@ module.exports = async function handler(req, res) {
         }
       }
 
-      // 3) Send to Discord webhook
-      const discordData = new FormData();
+      // 3) Read file into memory (native fetch + native FormData needs Blob/ArrayBuffer)
+      const buf = fs.readFileSync(tempPath);
 
-      // ✅ Token is in EMBED footer + description using exact format your Python regex matches: token: `...`
-      discordData.append(
+      // If formidable provides mimetype, use it; fallback to png
+      const mime = file.mimetype || "image/png";
+      const filename = file.originalFilename || "stoney_verify.png";
+
+      // 4) Send to Discord webhook using NATIVE FormData + Blob
+      const fd = new FormData();
+
+      fd.append(
         "payload_json",
         JSON.stringify({
           content: "🌿 **Verification Submission Received**",
@@ -106,27 +92,24 @@ module.exports = async function handler(req, res) {
         })
       );
 
-      discordData.append("file", fs.createReadStream(tempPath), {
-        filename: "stoney_verify.png",
-        contentType: "image/png",
-      });
+      // Blob is what makes the attachment actually work with native fetch
+      fd.append("file", new Blob([buf], { type: mime }), filename);
 
-      const discordRes = await fetchFn(row.webhook_url, {
+      const discordRes = await fetch(row.webhook_url, {
         method: "POST",
-        body: discordData,
-        headers: discordData.getHeaders(),
+        body: fd,
       });
 
       if (!discordRes.ok) {
         const txt = await discordRes.text().catch(() => "");
         return res.status(502).json({
           error: "Discord rejected webhook",
-          details: txt.slice(0, 300),
+          status: discordRes.status,
+          details: txt.slice(0, 500),
         });
       }
 
-      // 4) Optional submission logging (DO NOT mark used=true here)
-      // This will only work if those columns exist.
+      // 5) Optional submission logging (DO NOT set used=true here)
       try {
         await supabase
           .from("verification_tokens")
@@ -136,13 +119,11 @@ module.exports = async function handler(req, res) {
             ai_status: status || null,
           })
           .eq("token", token);
-      } catch (_) {
-        // ignore schema mismatch
-      }
+      } catch (_) {}
 
       return res.status(200).json({ success: true });
     } catch (e) {
-      console.error(e);
+      console.error("verify.js error:", e);
       return res.status(500).json({ error: "Internal server error" });
     } finally {
       if (tempPath) fs.unlink(tempPath, () => {});

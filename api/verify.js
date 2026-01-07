@@ -3,16 +3,18 @@ const formidable = require("formidable");
 const FormData = require("form-data");
 const fs = require("fs");
 
+// ✅ Ensure fetch exists everywhere (Vercel usually has it, but this prevents surprises)
+let fetchFn = global.fetch;
+try {
+  if (!fetchFn) fetchFn = require("node-fetch");
+} catch (_) {
+  // if node-fetch isn't installed, and global fetch doesn't exist, you'll get a clear error below
+}
+
 // ---- CORS (safe defaults for now) ----
 function setCors(req, res) {
-  // If you want to lock this down later:
-  // const allowed = new Set(["https://stoney-baloney-verify.vercel.app"]);
-  // const origin = req.headers.origin;
-  // if (allowed.has(origin)) res.setHeader("Access-Control-Allow-Origin", origin);
-
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
-  // IMPORTANT: allow the headers browsers actually send for multipart
   res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
 }
 
@@ -34,14 +36,18 @@ module.exports = async function handler(req, res) {
     return res.status(500).json({ error: "Server missing Supabase env vars" });
   }
 
+  if (!fetchFn) {
+    return res.status(500).json({
+      error: "Server missing fetch()",
+      details: "Install node-fetch or use a runtime that provides global fetch.",
+    });
+  }
+
   const supabase = createClient(supabaseUrl, serviceRoleKey, {
     auth: { persistSession: false },
   });
 
-  const form = formidable({
-    multiples: false,
-    keepExtensions: true,
-  });
+  const form = formidable({ multiples: false, keepExtensions: true });
 
   form.parse(req, async (err, fields, files) => {
     let tempPath = null;
@@ -67,7 +73,7 @@ module.exports = async function handler(req, res) {
 
       if (readErr || !row) return res.status(400).json({ error: "Invalid token" });
 
-      // IMPORTANT: "used" must mean DECIDED (approve/deny), not uploaded.
+      // IMPORTANT: used=true means DECIDED (approve/deny) not uploaded
       if (row.used) return res.status(400).json({ error: "Token already decided" });
 
       // 2) Expiry check
@@ -81,7 +87,7 @@ module.exports = async function handler(req, res) {
       // 3) Send to Discord webhook
       const discordData = new FormData();
 
-      // ✅ BEST PRACTICE: Put token inside an embed so the Python bot can parse WITHOUT message content intent
+      // ✅ Token is in EMBED footer + description using exact format your Python regex matches: token: `...`
       discordData.append(
         "payload_json",
         JSON.stringify({
@@ -92,7 +98,7 @@ module.exports = async function handler(req, res) {
               description:
                 `**Status:** ${status || "UNKNOWN"}\n` +
                 `**Token:** \`${token}\`\n\n` +
-                "Staff: click **Approve/Reject buttons** in the ticket (or react if you're still using reactions).",
+                "Staff: use the Approve/Reject buttons in the ticket.",
               footer: { text: `token: \`${token}\`` },
               timestamp: new Date().toISOString(),
             },
@@ -105,7 +111,7 @@ module.exports = async function handler(req, res) {
         contentType: "image/png",
       });
 
-      const discordRes = await fetch(row.webhook_url, {
+      const discordRes = await fetchFn(row.webhook_url, {
         method: "POST",
         body: discordData,
         headers: discordData.getHeaders(),
@@ -120,9 +126,9 @@ module.exports = async function handler(req, res) {
       }
 
       // 4) Optional submission logging (DO NOT mark used=true here)
-      // Safe ignore if columns don't exist
+      // This will only work if those columns exist.
       try {
-        const { error: updErr } = await supabase
+        await supabase
           .from("verification_tokens")
           .update({
             submitted: true,
@@ -130,10 +136,9 @@ module.exports = async function handler(req, res) {
             ai_status: status || null,
           })
           .eq("token", token);
-
-        // ignore if schema doesn't match
-        if (updErr) {}
-      } catch (_) {}
+      } catch (_) {
+        // ignore schema mismatch
+      }
 
       return res.status(200).json({ success: true });
     } catch (e) {
@@ -147,4 +152,4 @@ module.exports = async function handler(req, res) {
 
 module.exports.config = {
   api: { bodyParser: false },
-} 
+};

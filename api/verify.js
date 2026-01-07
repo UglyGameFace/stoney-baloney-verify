@@ -2,11 +2,14 @@ const { createClient } = require("@supabase/supabase-js");
 const formidable = require("formidable");
 const fs = require("fs");
 
-// Node/Vercel: ensure FormData + Blob exist in runtime
+// Ensure fetch + FormData + Blob exist in runtime (Vercel/Node differences)
+let fetchFn = global.fetch;
 let FormDataCtor = global.FormData;
 let BlobCtor = global.Blob;
+
 try {
   const undici = require("undici");
+  fetchFn = fetchFn || undici.fetch;
   FormDataCtor = FormDataCtor || undici.FormData;
   BlobCtor = BlobCtor || undici.Blob;
 } catch (_) {}
@@ -22,20 +25,29 @@ module.exports = async function handler(req, res) {
   setCors(req, res);
 
   if (req.method === "OPTIONS") return res.status(204).end();
-  if (req.method !== "POST") return res.status(405).json({ success: false, error: "Method not allowed" });
+  if (req.method !== "POST") {
+    return res.status(405).json({ success: false, error: "Method not allowed" });
+  }
 
   const supabaseUrl = process.env.SUPABASE_URL;
   const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
   if (!supabaseUrl || !serviceRoleKey) {
-    return res.status(500).json({ success: false, error: "Server missing Supabase env vars" });
+    return res
+      .status(500)
+      .json({ success: false, error: "Server missing Supabase env vars" });
+  }
+
+  if (!fetchFn || !FormDataCtor || !BlobCtor) {
+    return res
+      .status(500)
+      .json({ success: false, error: "Server runtime missing fetch/FormData/Blob" });
   }
 
   const supabase = createClient(supabaseUrl, serviceRoleKey, {
     auth: { persistSession: false },
   });
 
-  // IMPORTANT: keep this comfortably below platform limits
   const form = formidable({
     multiples: false,
     keepExtensions: true,
@@ -63,7 +75,6 @@ module.exports = async function handler(req, res) {
 
       tempPath = uploaded.filepath;
 
-      // Safety: reject if file is too big (server-side)
       if (uploaded.size && uploaded.size > 4 * 1024 * 1024) {
         return res.status(413).json({ success: false, error: "File too large (max 4MB)" });
       }
@@ -77,8 +88,6 @@ module.exports = async function handler(req, res) {
 
       if (readErr || !row) return res.status(400).json({ success: false, error: "Invalid token" });
       if (!row.webhook_url) return res.status(400).json({ success: false, error: "Token missing webhook_url" });
-
-      // used === DECIDED (approve/deny), NOT uploaded
       if (row.used) return res.status(400).json({ success: false, error: "Token already decided" });
 
       // 2) Expiry
@@ -89,20 +98,18 @@ module.exports = async function handler(req, res) {
         }
       }
 
-      // 3) Build Discord multipart
-      if (!FormDataCtor || !BlobCtor) {
-        return res.status(500).json({ success: false, error: "Server runtime missing FormData/Blob" });
-      }
-
+      // 3) Read upload + build Discord multipart
       const buf = fs.readFileSync(tempPath);
       const mime = uploaded.mimetype || "image/jpeg";
 
       const fd = new FormDataCtor();
+      const filename = "stoney_verify.jpg";
 
       fd.append(
         "payload_json",
         JSON.stringify({
           content: "🌿 **Verification Submission Received**",
+          attachments: [{ id: 0, filename, description: "User upload" }],
           embeds: [
             {
               title: "Stoney Verify Submission",
@@ -110,6 +117,7 @@ module.exports = async function handler(req, res) {
                 `**Status:** ${status || "UNKNOWN"}\n` +
                 `**Token:** \`${token}\`\n\n` +
                 "Staff: use the Approve/Reject buttons inside the ticket.",
+              image: { url: `attachment://${filename}` },
               footer: { text: `token: \`${token}\`` },
               timestamp: new Date().toISOString(),
             },
@@ -117,9 +125,15 @@ module.exports = async function handler(req, res) {
         })
       );
 
-      fd.append("files[0]", new BlobCtor([buf], { type: mime }), "stoney_verify.jpg");
+      fd.append("files[0]", new BlobCtor([buf], { type: mime }), filename);
 
-      const discordRes = await fetch(row.webhook_url, { method: "POST", body: fd });
+      // Force wait=true so we can get a JSON response back (helps debugging)
+      const webhookUrl =
+        row.webhook_url.includes("?")
+          ? `${row.webhook_url}&wait=true`
+          : `${row.webhook_url}?wait=true`;
+
+      const discordRes = await fetchFn(webhookUrl, { method: "POST", body: fd });
 
       if (!discordRes.ok) {
         const txt = await discordRes.text().catch(() => "");
@@ -130,6 +144,12 @@ module.exports = async function handler(req, res) {
           status: discordRes.status,
         });
       }
+
+      // Optional: read response to confirm attachments exist
+      // (won't crash if not JSON)
+      const discordBody = await discordRes.text().catch(() => "");
+      // Uncomment if you want:
+      // console.log("discord webhook response:", discordBody.slice(0, 500));
 
       // 4) Optional logging
       try {
@@ -146,7 +166,11 @@ module.exports = async function handler(req, res) {
       return res.status(200).json({ success: true });
     } catch (e) {
       console.error("verify api error:", e);
-      return res.status(500).json({ success: false, error: "Internal server error", details: String(e?.message || e) });
+      return res.status(500).json({
+        success: false,
+        error: "Internal server error",
+        details: String(e?.message || e),
+      });
     } finally {
       if (tempPath) fs.unlink(tempPath, () => {});
     }

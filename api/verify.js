@@ -60,7 +60,9 @@ module.exports = async function handler(req, res) {
         .single();
 
       if (readErr || !row) return res.status(400).json({ error: "Invalid token" });
-      if (row.used) return res.status(400).json({ error: "Token already used" });
+
+      // IMPORTANT: "used" must mean DECIDED (approve/deny), not uploaded.
+      if (row.used) return res.status(400).json({ error: "Token already decided" });
 
       // 2) Expiry check
       if (row.expires_at) {
@@ -70,13 +72,18 @@ module.exports = async function handler(req, res) {
         }
       }
 
-      // 3) Send to Discord webhook (Vercel global fetch)
+      // 3) Send to Discord webhook (Vercel has global fetch)
       const discordData = new FormData();
 
+      // ✅ CRITICAL: Include Token in message so the Python bot can parse it
       discordData.append(
         "payload_json",
         JSON.stringify({
-          content: `🌿 **Verification Submitted**\n> Status: ${status || "UNKNOWN"}`,
+          content:
+            "🌿 **Verification**\n" +
+            `> Status: ${status || "UNKNOWN"}\n` +
+            `> Token: \`${token}\`\n\n` +
+            "Staff: react ✅ to approve or ❌ to deny.",
         })
       );
 
@@ -99,12 +106,22 @@ module.exports = async function handler(req, res) {
         });
       }
 
-      // 4) Mark token used (race-safe)
-      await supabase
-        .from("verification_tokens")
-        .update({ used: true })
-        .eq("token", token)
-        .eq("used", false);
+      // 4) Log submission to Supabase (DO NOT mark used=true here)
+      // This will only work if these columns exist. If they don't, it won't break the flow.
+      // You can add these columns later:
+      // submitted_at timestamptz, submitted bool, ai_status text
+      try {
+        await supabase
+          .from("verification_tokens")
+          .update({
+            submitted: true,
+            submitted_at: new Date().toISOString(),
+            ai_status: status || null,
+          })
+          .eq("token", token);
+      } catch (e) {
+        // Safe ignore: table might not have these columns yet
+      }
 
       return res.status(200).json({ success: true });
     } catch (e) {

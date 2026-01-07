@@ -1,0 +1,10 @@
+{
+  "name": "stoney-verify",
+  "version": "1.0.0",
+  "private": true,
+  "dependencies": {
+    "@supabase/supabase-js": "^2.45.0",
+    "form-data": "^4.0.0",
+    "formidable": "^3.5.1"
+  }
+}

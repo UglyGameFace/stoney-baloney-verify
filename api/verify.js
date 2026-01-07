@@ -4,14 +4,20 @@ const FormData = require("form-data");
 const fs = require("fs");
 
 // ---- CORS (safe defaults for now) ----
-function setCors(res) {
+function setCors(req, res) {
+  // If you want to lock this down later:
+  // const allowed = new Set(["https://stoney-baloney-verify.vercel.app"]);
+  // const origin = req.headers.origin;
+  // if (allowed.has(origin)) res.setHeader("Access-Control-Allow-Origin", origin);
+
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+  // IMPORTANT: allow the headers browsers actually send for multipart
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
 }
 
 module.exports = async function handler(req, res) {
-  setCors(res);
+  setCors(req, res);
 
   // Preflight
   if (req.method === "OPTIONS") return res.status(204).end();
@@ -72,18 +78,25 @@ module.exports = async function handler(req, res) {
         }
       }
 
-      // 3) Send to Discord webhook (Vercel has global fetch)
+      // 3) Send to Discord webhook
       const discordData = new FormData();
 
-      // ✅ CRITICAL: Include Token in message so the Python bot can parse it
+      // ✅ BEST PRACTICE: Put token inside an embed so the Python bot can parse WITHOUT message content intent
       discordData.append(
         "payload_json",
         JSON.stringify({
-          content:
-            "🌿 **Verification**\n" +
-            `> Status: ${status || "UNKNOWN"}\n` +
-            `> Token: \`${token}\`\n\n` +
-            "Staff: react ✅ to approve or ❌ to deny.",
+          content: "🌿 **Verification Submission Received**",
+          embeds: [
+            {
+              title: "Stoney Verify Submission",
+              description:
+                `**Status:** ${status || "UNKNOWN"}\n` +
+                `**Token:** \`${token}\`\n\n` +
+                "Staff: click **Approve/Reject buttons** in the ticket (or react if you're still using reactions).",
+              footer: { text: `token: \`${token}\`` },
+              timestamp: new Date().toISOString(),
+            },
+          ],
         })
       );
 
@@ -106,12 +119,10 @@ module.exports = async function handler(req, res) {
         });
       }
 
-      // 4) Log submission to Supabase (DO NOT mark used=true here)
-      // This will only work if these columns exist. If they don't, it won't break the flow.
-      // You can add these columns later:
-      // submitted_at timestamptz, submitted bool, ai_status text
+      // 4) Optional submission logging (DO NOT mark used=true here)
+      // Safe ignore if columns don't exist
       try {
-        await supabase
+        const { error: updErr } = await supabase
           .from("verification_tokens")
           .update({
             submitted: true,
@@ -119,9 +130,10 @@ module.exports = async function handler(req, res) {
             ai_status: status || null,
           })
           .eq("token", token);
-      } catch (e) {
-        // Safe ignore: table might not have these columns yet
-      }
+
+        // ignore if schema doesn't match
+        if (updErr) {}
+      } catch (_) {}
 
       return res.status(200).json({ success: true });
     } catch (e) {
@@ -135,4 +147,4 @@ module.exports = async function handler(req, res) {
 
 module.exports.config = {
   api: { bodyParser: false },
-};
+} 

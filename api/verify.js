@@ -2,8 +2,8 @@ const { createClient } = require("@supabase/supabase-js");
 const formidable = require("formidable");
 const FormData = require("form-data");
 const fs = require("fs");
-const fetch = require("node-fetch");
 
+// ---- CORS (safe defaults for now) ----
 function setCors(res) {
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
@@ -13,8 +13,13 @@ function setCors(res) {
 module.exports = async function handler(req, res) {
   setCors(res);
 
+  // Preflight
   if (req.method === "OPTIONS") return res.status(204).end();
-  if (req.method !== "POST") return res.status(405).json({ error: "Method not allowed" });
+
+  // Only POST
+  if (req.method !== "POST") {
+    return res.status(405).json({ error: "Method not allowed" });
+  }
 
   const supabaseUrl = process.env.SUPABASE_URL;
   const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -27,7 +32,10 @@ module.exports = async function handler(req, res) {
     auth: { persistSession: false },
   });
 
-  const form = formidable({ multiples: false, keepExtensions: true });
+  const form = formidable({
+    multiples: false,
+    keepExtensions: true,
+  });
 
   form.parse(req, async (err, fields, files) => {
     let tempPath = null;
@@ -44,6 +52,7 @@ module.exports = async function handler(req, res) {
 
       tempPath = file.filepath;
 
+      // 1) Lookup token
       const { data: row, error: readErr } = await supabase
         .from("verification_tokens")
         .select("webhook_url, expires_at, used")
@@ -53,6 +62,7 @@ module.exports = async function handler(req, res) {
       if (readErr || !row) return res.status(400).json({ error: "Invalid token" });
       if (row.used) return res.status(400).json({ error: "Token already used" });
 
+      // 2) Expiry check
       if (row.expires_at) {
         const expMs = new Date(row.expires_at).getTime();
         if (Number.isFinite(expMs) && Date.now() > expMs) {
@@ -60,62 +70,41 @@ module.exports = async function handler(req, res) {
         }
       }
 
-      // 1) Post the image
-      const imgData = new FormData();
-      imgData.append(
+      // 3) Send to Discord webhook (Vercel global fetch)
+      const discordData = new FormData();
+
+      discordData.append(
         "payload_json",
         JSON.stringify({
-          content:
-            `🌿 **Verification Upload Received**\n` +
-            `> Status: ${status || "UNKNOWN"}\n` +
-            `> Token: \`${token}\`\n\n` +
-            `Staff: please review the image below.`,
+          content: `🌿 **Verification Submitted**\n> Status: ${status || "UNKNOWN"}`,
         })
       );
 
-      imgData.append("file", fs.createReadStream(tempPath), {
+      discordData.append("file", fs.createReadStream(tempPath), {
         filename: "stoney_verify.png",
         contentType: "image/png",
       });
 
       const discordRes = await fetch(row.webhook_url, {
         method: "POST",
-        body: imgData,
-        headers: imgData.getHeaders(),
+        body: discordData,
+        headers: discordData.getHeaders(),
       });
 
       if (!discordRes.ok) {
         const txt = await discordRes.text().catch(() => "");
-        return res.status(502).json({ error: "Discord rejected webhook", details: txt.slice(0, 300) });
+        return res.status(502).json({
+          error: "Discord rejected webhook",
+          details: txt.slice(0, 300),
+        });
       }
 
-      // 2) Post a separate “Submission” message that staff reacts to
-      // This is what your Discloud bot watches for.
-      const decisionData = new FormData();
-      decisionData.append(
-        "payload_json",
-        JSON.stringify({
-          content:
-            `🧾 **Verification Submission (STAFF ACTION REQUIRED)**\n` +
-            `React ✅ to **APPROVE** (grants Resident + Verified)\n` +
-            `React ❌ to **DENY**\n\n` +
-            `Token: \`${token}\``,
-        })
-      );
-
-      const decisionRes = await fetch(row.webhook_url, {
-        method: "POST",
-        body: decisionData,
-        headers: decisionData.getHeaders(),
-      });
-
-      if (!decisionRes.ok) {
-        const txt = await decisionRes.text().catch(() => "");
-        return res.status(502).json({ error: "Discord rejected decision message", details: txt.slice(0, 300) });
-      }
-
-      // IMPORTANT: we do NOT mark "used" here.
-      // Token gets closed ONLY when staff approves/denies via the bot.
+      // 4) Mark token used (race-safe)
+      await supabase
+        .from("verification_tokens")
+        .update({ used: true })
+        .eq("token", token)
+        .eq("used", false);
 
       return res.status(200).json({ success: true });
     } catch (e) {

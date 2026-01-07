@@ -28,12 +28,10 @@
       min-height: 100dvh; display: flex; flex-direction: column; overflow-x: hidden; position: relative; touch-action: none;
     }
 
-    /* --- VISUAL FX --- */
     .trippy-bg { position: fixed; top: 0; left: 0; width: 200%; height: 200%; background: radial-gradient(circle, #1a0b2e 10%, #000000 90%); z-index: -3; animation: breathe 10s infinite alternate; }
     .grid-bg { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-image: linear-gradient(var(--grid-color) 1px, transparent 1px), linear-gradient(90deg, var(--grid-color) 1px, transparent 1px); background-size: 40px 40px; perspective: 500px; z-index: -2; opacity: 0.5; mask-image: radial-gradient(circle, black 40%, transparent 80%); }
     .scanlines { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.25) 50%), linear-gradient(90deg, rgba(255, 0, 0, 0.06), rgba(0, 255, 0, 0.02), rgba(0, 0, 255, 0.06)); background-size: 100% 2px, 3px 100%; pointer-events: none; z-index: 999; }
 
-    /* --- LAYOUT --- */
     .app-container { flex: 1; display: flex; flex-direction: column; width: 100%; max-width: 500px; margin: 0 auto; padding: 15px; z-index: 10; position: relative; }
     .header { text-align: center; margin-bottom: 10px; margin-top: 10px; }
     .logo-icon { font-size: 50px; color: var(--neon-green); filter: drop-shadow(0 0 15px var(--neon-green)); animation: float 3s ease-in-out infinite; }
@@ -49,14 +47,12 @@
     .btn:active { transform: scale(0.98); background: var(--neon-green); }
     .btn:disabled { opacity: 0.45; cursor: not-allowed; filter: grayscale(0.3); }
 
-    /* --- SCREENS --- */
     .screen { display: none; flex-direction: column; flex: 1; height: 100%; }
     .screen.active { display: flex; animation: fade-in 0.4s ease; }
     @keyframes fade-in { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
     @keyframes breathe { 0% { transform: scale(1); } 100% { transform: scale(1.1); } }
     @keyframes float { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-6px); } }
 
-    /* --- SELECT SCREEN --- */
     .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin: 20px 0; }
     .option { background: rgba(0,0,0,0.4); border: 2px solid #333; border-radius: 10px; padding: 25px 10px; text-align: center; transition: 0.2s; user-select:none; }
     .option:active { border-color: var(--neon-green); background: rgba(57, 255, 20, 0.15); box-shadow: 0 0 15px var(--neon-green); }
@@ -64,7 +60,6 @@
     .feature-row { display: flex; align-items: center; margin-bottom: 15px; }
     .feature-row i { font-size: 20px; color: var(--neon-purple); margin-right: 15px; width: 25px; text-align: center; }
 
-    /* --- EDITOR SCREEN --- */
     #editor-wrapper {
       flex: 1; position: relative; background: #000; border: 2px solid var(--neon-green);
       border-radius: 10px; overflow: hidden; margin-bottom: 10px; box-shadow: 0 0 20px rgba(57, 255, 20, 0.1);
@@ -88,7 +83,6 @@
       display: flex; align-items: center; justify-content: center; cursor:pointer;
     }
 
-    /* --- TUTORIAL OVERLAY --- */
     #tutorial-overlay {
       position: absolute; top: 0; left: 0; width: 100%; height: 100%;
       background: rgba(0,0,0,0.85); z-index: 500; display: none; justify-content: center; align-items: center;
@@ -98,7 +92,6 @@
     .tut-row { display: flex; align-items: center; margin-bottom: 20px; text-align: left; }
     .tut-icon { font-size: 30px; width: 50px; text-align: center; margin-right: 15px; }
 
-    /* --- LOADING --- */
     #loading-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.95); z-index: 2000; display: none; justify-content: center; align-items: center; flex-direction: column; }
     .loading-text { font-family: 'Rubik Glitch'; color: var(--neon-green); font-size: 24px; margin-top: 20px; }
     .scanner-beam { width: 250px; height: 2px; background: var(--neon-green); animation: scan-beam 1.5s infinite linear; box-shadow: 0 0 10px var(--neon-green); }
@@ -107,7 +100,6 @@
     #manual-options { display: none; width: 80%; text-align: center; margin-top: 20px; }
     .btn-manual { background: transparent; border: 1px solid var(--neon-orange); color: var(--neon-orange); padding: 10px; width: 100%; margin-top: 10px; font-weight:bold; cursor:pointer;}
 
-    /* Token warning */
     .token-warning {
       background: rgba(255, 51, 51, 0.1);
       border: 1px solid rgba(255, 51, 51, 0.4);
@@ -185,8 +177,8 @@
         </div>
       </div>
 
-      <!-- ✅ Better cross-device camera support -->
-      <input type="file" id="fileInput" accept="image/*" capture onchange="handleImage(this)" style="display:none;">
+      <!-- ✅ camera -->
+      <input type="file" id="fileInput" accept="image/*" capture="environment" onchange="handleImage(this)" style="display:none;">
     </div>
 
     <div id="screen-edit" class="screen">
@@ -259,7 +251,7 @@
     let VERIFY_TOKEN = null;
 
     let img = new Image();
-    let strokes = []; // {points:[{x,y}], size}
+    let strokes = [];
     let currentStroke = [];
     let view = { x: 0, y: 0, scale: 1 };
     let brushSize = 30;
@@ -274,22 +266,25 @@
     let scanTimer = null;
     let aiResult = "SKIPPED";
 
-    // These handlers need to be bound AFTER editor opens (fixes random null/ghost bugs)
     let editorListenersBound = false;
 
     window.onload = async () => {
       const params = new URLSearchParams(window.location.search);
       VERIFY_TOKEN = params.get("token");
 
-      // Lock if missing token
       if (!VERIFY_TOKEN) {
         document.getElementById("tokenWarning").style.display = "block";
         const startBtn = document.getElementById("startBtn");
         if (startBtn) startBtn.disabled = true;
       }
 
-      try { faceModel = await blazeface.load(); console.log("AI Ready"); }
-      catch(e) { console.log("AI Failed", e); }
+      try {
+        faceModel = await blazeface.load();
+        console.log("AI Ready");
+      } catch(e) {
+        console.log("AI Failed", e);
+        // Don't auto-skip. We'll let scan attempt show SKIP button if it fails later.
+      }
     };
 
     function goToScreen(id) {
@@ -314,10 +309,20 @@
       document.getElementById("manual-options").style.display = "none";
       document.getElementById("loading-msg").innerText = "SCANNING...";
 
+      // reset editor state for this upload
+      strokes = [];
+      currentStroke = [];
+      isDrawing = false;
+      isPinching = false;
+      currentRotation = 0;
+      aiResult = "SKIPPED";
+
+      // longer failsafe: some phones take longer to load models
+      clearTimeout(scanTimer);
       scanTimer = setTimeout(() => {
         document.getElementById("manual-options").style.display = "block";
-        document.getElementById("loading-msg").innerText = "AI STUCK?";
-      }, 3500);
+        document.getElementById("loading-msg").innerText = "TAKING TOO LONG — TAP SKIP";
+      }, 6000);
 
       const url = URL.createObjectURL(file);
       img.onload = () => {
@@ -334,19 +339,34 @@
     async function runAI(canvasRef) {
       try {
         if (!faceModel) faceModel = await blazeface.load();
+
         const preds = await faceModel.estimateFaces(canvasRef, false);
 
         if (preds && preds.length > 0) {
           aiResult = "VERIFIED";
           forceEditor();
+          return;
+        }
+
+        // no face detected
+        aiResult = "NOT_DETECTED";
+        clearTimeout(scanTimer);
+        document.getElementById("manual-options").style.display = "block";
+        document.getElementById("loading-msg").innerText = "NO FACE DETECTED";
+
+        // require explicit user choice
+        if (confirm("No face detected. Continue anyway?")) {
+          forceEditor();
         } else {
-          aiResult = "NOT_DETECTED";
-          if (confirm("No face detected. Is this a valid ID?")) forceEditor();
-          else location.reload();
+          location.reload();
         }
       } catch(e) {
-        aiResult = "SKIPPED";
-        forceEditor();
+        // ✅ CRITICAL FIX: do NOT auto-skip on AI failure
+        aiResult = "AI_FAILED";
+        clearTimeout(scanTimer);
+        document.getElementById("manual-options").style.display = "block";
+        document.getElementById("loading-msg").innerText = "AI FAILED — TAP SKIP IF YOU WANT";
+        console.log("AI error:", e);
       }
     }
 
@@ -354,12 +374,6 @@
       clearTimeout(scanTimer);
       document.getElementById("loading-overlay").style.display = "none";
       goToScreen("screen-edit");
-
-      strokes = [];
-      currentStroke = [];
-      isDrawing = false;
-      isPinching = false;
-      currentRotation = 0;
 
       const wrapper = document.getElementById("editor-wrapper");
       const canvas = document.getElementById("canvas");
@@ -377,9 +391,7 @@
         y: (canvas.height - img.height * s) / 2
       };
 
-      // ✅ Bind touch listeners here (fixes the "sometimes dead" issue)
       bindEditorListeners();
-
       document.getElementById("tutorial-overlay").style.display = "flex";
       render();
     }
@@ -425,7 +437,6 @@
             x: (e.touches[0].clientX + e.touches[1].clientX) / 2,
             y: (e.touches[0].clientY + e.touches[1].clientY) / 2
           };
-
         } else if (e.touches.length === 1 && !isPinching) {
           isDrawing = true;
           const rect = canvasEl.getBoundingClientRect();
@@ -455,7 +466,6 @@
           lastDist = dist;
 
           render();
-
         } else if (isDrawing && e.touches.length === 1) {
           const rect = canvasEl.getBoundingClientRect();
           const pt = toWorld(e.touches[0].clientX - rect.left, e.touches[0].clientY - rect.top);
@@ -543,7 +553,6 @@
       outCan.height = img.height;
       const ctx = outCan.getContext("2d");
 
-      // draw rotated image
       ctx.save();
       ctx.translate(img.width/2, img.height/2);
       ctx.rotate(currentRotation * Math.PI / 180);
@@ -551,7 +560,6 @@
       ctx.drawImage(img, 0, 0);
       ctx.restore();
 
-      // draw strokes in rotated context
       ctx.save();
       ctx.translate(img.width/2, img.height/2);
       ctx.rotate(currentRotation * Math.PI / 180);
@@ -572,6 +580,13 @@
       ctx.restore();
 
       outCan.toBlob(blob => {
+        if (!blob) {
+          alert("Could not create image blob. Try a different photo.");
+          btn.disabled = false;
+          btn.innerHTML = "UPLOAD SECURELY";
+          return;
+        }
+
         const form = new FormData();
         form.append("file", blob, "stoney_verify.png");
         form.append("token", VERIFY_TOKEN);
@@ -592,7 +607,6 @@
             btn.innerHTML = "UPLOAD SECURELY";
           });
       }, "image/png");
-
     }
   </script>
 </body>

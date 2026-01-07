@@ -1,7 +1,15 @@
 const { createClient } = require("@supabase/supabase-js");
 const formidable = require("formidable");
 const fs = require("fs");
-const FormData = require("form-data");
+
+// Node/Vercel: ensure FormData + Blob exist in runtime
+let FormDataCtor = global.FormData;
+let BlobCtor = global.Blob;
+try {
+  const undici = require("undici");
+  FormDataCtor = FormDataCtor || undici.FormData;
+  BlobCtor = BlobCtor || undici.Blob;
+} catch (_) {}
 
 // ---- CORS ----
 function setCors(req, res) {
@@ -14,25 +22,24 @@ module.exports = async function handler(req, res) {
   setCors(req, res);
 
   if (req.method === "OPTIONS") return res.status(204).end();
-  if (req.method !== "POST") return res.status(405).json({ error: "Method not allowed" });
+  if (req.method !== "POST") return res.status(405).json({ success: false, error: "Method not allowed" });
 
   const supabaseUrl = process.env.SUPABASE_URL;
   const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
   if (!supabaseUrl || !serviceRoleKey) {
-    return res.status(500).json({ error: "Server missing Supabase env vars" });
+    return res.status(500).json({ success: false, error: "Server missing Supabase env vars" });
   }
 
   const supabase = createClient(supabaseUrl, serviceRoleKey, {
     auth: { persistSession: false },
   });
 
-  // NOTE: add limits so mobile photos don't explode the function
+  // IMPORTANT: keep this comfortably below platform limits
   const form = formidable({
     multiples: false,
     keepExtensions: true,
-    maxFileSize: 8 * 1024 * 1024, // 8MB
-    allowEmptyFiles: false,
+    maxFileSize: 4 * 1024 * 1024, // 4MB
   });
 
   form.parse(req, async (err, fields, files) => {
@@ -41,25 +48,24 @@ module.exports = async function handler(req, res) {
     try {
       if (err) {
         return res.status(400).json({
-          error: "Bad upload payload",
+          success: false,
+          error: "Bad upload payload (maybe too large)",
           details: String(err?.message || err),
         });
       }
 
       const token = Array.isArray(fields.token) ? fields.token[0] : fields.token;
       const status = Array.isArray(fields.status) ? fields.status[0] : fields.status;
-
       const uploaded = Array.isArray(files.file) ? files.file[0] : files.file;
 
-      if (!token) return res.status(400).json({ error: "Missing token" });
-      if (!uploaded?.filepath) return res.status(400).json({ error: "Missing file" });
+      if (!token) return res.status(400).json({ success: false, error: "Missing token" });
+      if (!uploaded?.filepath) return res.status(400).json({ success: false, error: "Missing file" });
 
       tempPath = uploaded.filepath;
 
-      // Basic file sanity
-      const mime = uploaded.mimetype || "image/png";
-      if (!mime.startsWith("image/")) {
-        return res.status(400).json({ error: "File must be an image", details: mime });
+      // Safety: reject if file is too big (server-side)
+      if (uploaded.size && uploaded.size > 4 * 1024 * 1024) {
+        return res.status(413).json({ success: false, error: "File too large (max 4MB)" });
       }
 
       // 1) Lookup token
@@ -69,25 +75,29 @@ module.exports = async function handler(req, res) {
         .eq("token", token)
         .single();
 
-      if (readErr || !row) return res.status(400).json({ error: "Invalid token" });
+      if (readErr || !row) return res.status(400).json({ success: false, error: "Invalid token" });
+      if (!row.webhook_url) return res.status(400).json({ success: false, error: "Token missing webhook_url" });
 
       // used === DECIDED (approve/deny), NOT uploaded
-      if (row.used) return res.status(400).json({ error: "Token already decided" });
+      if (row.used) return res.status(400).json({ success: false, error: "Token already decided" });
 
       // 2) Expiry
       if (row.expires_at) {
         const expMs = new Date(row.expires_at).getTime();
         if (Number.isFinite(expMs) && Date.now() > expMs) {
-          return res.status(400).json({ error: "Token expired" });
+          return res.status(400).json({ success: false, error: "Token expired" });
         }
       }
 
-      if (!row.webhook_url) {
-        return res.status(500).json({ error: "Token row missing webhook_url" });
+      // 3) Build Discord multipart
+      if (!FormDataCtor || !BlobCtor) {
+        return res.status(500).json({ success: false, error: "Server runtime missing FormData/Blob" });
       }
 
-      // 3) Build multipart for Discord webhook (ROBUST)
-      const fd = new FormData();
+      const buf = fs.readFileSync(tempPath);
+      const mime = uploaded.mimetype || "image/jpeg";
+
+      const fd = new FormDataCtor();
 
       fd.append(
         "payload_json",
@@ -107,28 +117,21 @@ module.exports = async function handler(req, res) {
         })
       );
 
-      // Discord wants files[0]
-      fd.append("files[0]", fs.createReadStream(tempPath), {
-        filename: "stoney_verify.png",
-        contentType: mime,
-      });
+      fd.append("files[0]", new BlobCtor([buf], { type: mime }), "stoney_verify.jpg");
 
-      const discordRes = await fetch(row.webhook_url, {
-        method: "POST",
-        headers: fd.getHeaders(), // ✅ IMPORTANT: sets boundary
-        body: fd,
-      });
-
-      const discordText = await discordRes.text().catch(() => "");
+      const discordRes = await fetch(row.webhook_url, { method: "POST", body: fd });
 
       if (!discordRes.ok) {
+        const txt = await discordRes.text().catch(() => "");
         return res.status(502).json({
+          success: false,
           error: "Discord rejected webhook",
-          details: discordText.slice(0, 700),
+          details: txt.slice(0, 500),
+          status: discordRes.status,
         });
       }
 
-      // 4) Optional logging (safe-ignore if columns don’t exist)
+      // 4) Optional logging
       try {
         await supabase
           .from("verification_tokens")
@@ -143,10 +146,7 @@ module.exports = async function handler(req, res) {
       return res.status(200).json({ success: true });
     } catch (e) {
       console.error("verify api error:", e);
-      return res.status(500).json({
-        error: "Internal server error",
-        details: String(e?.message || e),
-      });
+      return res.status(500).json({ success: false, error: "Internal server error", details: String(e?.message || e) });
     } finally {
       if (tempPath) fs.unlink(tempPath, () => {});
     }

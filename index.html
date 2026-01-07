@@ -1,554 +1,599 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Stoney Baloney Verify</title>
-    
-    <link href="https://fonts.googleapis.com/css2?family=Rubik+Glitch&family=Fredoka:wght@400;600&family=Share+Tech+Mono&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>Stoney Baloney Verify</title>
 
-    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@latest/dist/tf.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/blazeface"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Rubik+Glitch&family=Fredoka:wght@400;600&family=Share+Tech+Mono&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 
-    <style>
-        :root {
-            --neon-green: #39ff14;
-            --neon-red: #ff3333;
-            --neon-orange: #ffaa00;
-            --neon-purple: #bc13fe;
-            --deep-space: #050505;
-            --grid-color: rgba(57, 255, 20, 0.15);
-        }
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@latest/dist/tf.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/blazeface"></script>
 
-        * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+  <style>
+    :root {
+      --neon-green: #39ff14;
+      --neon-red: #ff3333;
+      --neon-orange: #ffaa00;
+      --neon-purple: #bc13fe;
+      --deep-space: #050505;
+      --grid-color: rgba(57, 255, 20, 0.15);
+    }
 
-        body {
-            background-color: var(--deep-space); color: #fff; font-family: 'Fredoka', sans-serif;
-            min-height: 100dvh; display: flex; flex-direction: column; overflow-x: hidden; position: relative; touch-action: none;
-        }
+    * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
 
-        /* --- VISUAL FX --- */
-        .trippy-bg { position: fixed; top: 0; left: 0; width: 200%; height: 200%; background: radial-gradient(circle, #1a0b2e 10%, #000000 90%); z-index: -3; animation: breathe 10s infinite alternate; }
-        .grid-bg { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-image: linear-gradient(var(--grid-color) 1px, transparent 1px), linear-gradient(90deg, var(--grid-color) 1px, transparent 1px); background-size: 40px 40px; perspective: 500px; z-index: -2; opacity: 0.5; mask-image: radial-gradient(circle, black 40%, transparent 80%); }
-        .scanlines { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.25) 50%), linear-gradient(90deg, rgba(255, 0, 0, 0.06), rgba(0, 255, 0, 0.02), rgba(0, 0, 255, 0.06)); background-size: 100% 2px, 3px 100%; pointer-events: none; z-index: 999; }
+    body {
+      background-color: var(--deep-space); color: #fff; font-family: 'Fredoka', sans-serif;
+      min-height: 100dvh; display: flex; flex-direction: column; overflow-x: hidden; position: relative; touch-action: none;
+    }
 
-        /* --- LAYOUT --- */
-        .app-container { flex: 1; display: flex; flex-direction: column; width: 100%; max-width: 500px; margin: 0 auto; padding: 15px; z-index: 10; position: relative; }
-        .header { text-align: center; margin-bottom: 10px; margin-top: 10px; }
-        .logo-icon { font-size: 50px; color: var(--neon-green); filter: drop-shadow(0 0 15px var(--neon-green)); animation: float 3s ease-in-out infinite; }
-        .brand-name { font-family: 'Rubik Glitch', cursive; font-size: 32px; color: #fff; text-shadow: 2px 2px 0px var(--neon-purple); margin-top: 5px; line-height: 1; }
-        
-        .btn { background: linear-gradient(45deg, var(--neon-green), #006400); color: #000; width: 100%; padding: 16px; border: none; border-radius: 4px; font-size: 20px; font-weight: 800; font-family: 'Rubik Glitch', sans-serif; letter-spacing: 2px; text-transform: uppercase; cursor: pointer; box-shadow: 0 0 15px rgba(57, 255, 20, 0.4); margin-bottom: 10px; clip-path: polygon(10px 0, 100% 0, 100% calc(100% - 10px), calc(100% - 10px) 100%, 0 100%, 0 10px); }
-        .btn:active { transform: scale(0.98); background: var(--neon-green); }
-        .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+    /* --- VISUAL FX --- */
+    .trippy-bg { position: fixed; top: 0; left: 0; width: 200%; height: 200%; background: radial-gradient(circle, #1a0b2e 10%, #000000 90%); z-index: -3; animation: breathe 10s infinite alternate; }
+    .grid-bg { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-image: linear-gradient(var(--grid-color) 1px, transparent 1px), linear-gradient(90deg, var(--grid-color) 1px, transparent 1px); background-size: 40px 40px; perspective: 500px; z-index: -2; opacity: 0.5; mask-image: radial-gradient(circle, black 40%, transparent 80%); }
+    .scanlines { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.25) 50%), linear-gradient(90deg, rgba(255, 0, 0, 0.06), rgba(0, 255, 0, 0.02), rgba(0, 0, 255, 0.06)); background-size: 100% 2px, 3px 100%; pointer-events: none; z-index: 999; }
 
-        /* --- SCREENS --- */
-        .screen { display: none; flex-direction: column; flex: 1; height: 100%; }
-        .screen.active { display: flex; animation: fade-in 0.4s ease; }
-        @keyframes fade-in { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
-        @keyframes breathe { 0% { transform: scale(1); } 100% { transform: scale(1.1); } }
+    /* --- LAYOUT --- */
+    .app-container { flex: 1; display: flex; flex-direction: column; width: 100%; max-width: 500px; margin: 0 auto; padding: 15px; z-index: 10; position: relative; }
+    .header { text-align: center; margin-bottom: 10px; margin-top: 10px; }
+    .logo-icon { font-size: 50px; color: var(--neon-green); filter: drop-shadow(0 0 15px var(--neon-green)); animation: float 3s ease-in-out infinite; }
+    .brand-name { font-family: 'Rubik Glitch', cursive; font-size: 32px; color: #fff; text-shadow: 2px 2px 0px var(--neon-purple); margin-top: 5px; line-height: 1; }
 
-        /* --- SELECT SCREEN --- */
-        .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin: 20px 0; }
-        .option { background: rgba(0,0,0,0.4); border: 2px solid #333; border-radius: 10px; padding: 25px 10px; text-align: center; transition: 0.2s; }
-        .option:active { border-color: var(--neon-green); background: rgba(57, 255, 20, 0.15); box-shadow: 0 0 15px var(--neon-green); }
-        .option i { font-size: 32px; color: #fff; margin-bottom: 10px; }
-        .feature-row { display: flex; align-items: center; margin-bottom: 15px; }
-        .feature-row i { font-size: 20px; color: var(--neon-purple); margin-right: 15px; width: 25px; text-align: center; }
+    .btn {
+      background: linear-gradient(45deg, var(--neon-green), #006400); color: #000; width: 100%;
+      padding: 16px; border: none; border-radius: 4px; font-size: 20px; font-weight: 800;
+      font-family: 'Rubik Glitch', sans-serif; letter-spacing: 2px; text-transform: uppercase; cursor: pointer;
+      box-shadow: 0 0 15px rgba(57, 255, 20, 0.4); margin-bottom: 10px;
+      clip-path: polygon(10px 0, 100% 0, 100% calc(100% - 10px), calc(100% - 10px) 100%, 0 100%, 0 10px);
+    }
+    .btn:active { transform: scale(0.98); background: var(--neon-green); }
+    .btn:disabled { opacity: 0.45; cursor: not-allowed; filter: grayscale(0.3); }
 
-        /* --- EDITOR SCREEN --- */
-        #editor-wrapper {
-            flex: 1; position: relative; background: #000; border: 2px solid var(--neon-green);
-            border-radius: 10px; overflow: hidden; margin-bottom: 10px; box-shadow: 0 0 20px rgba(57, 255, 20, 0.1);
-        }
-        canvas { display: block; width: 100%; height: 100%; touch-action: none; }
+    /* --- SCREENS --- */
+    .screen { display: none; flex-direction: column; flex: 1; height: 100%; }
+    .screen.active { display: flex; animation: fade-in 0.4s ease; }
+    @keyframes fade-in { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+    @keyframes breathe { 0% { transform: scale(1); } 100% { transform: scale(1.1); } }
+    @keyframes float { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-6px); } }
 
-        /* FULL TOOLBAR RESTORED */
-        .toolbar-main {
-            display: grid; grid-template-columns: repeat(5, 1fr); gap: 5px; margin-bottom: 10px;
-        }
-        .tool-btn {
-            background: rgba(20, 20, 20, 0.9); border: 1px solid #444; color: #fff;
-            padding: 10px 5px; border-radius: 6px; font-family: 'Share Tech Mono'; font-size: 10px;
-            text-align: center; display: flex; flex-direction: column; align-items: center; gap: 5px; cursor:pointer;
-        }
-        .tool-btn i { font-size: 16px; color: var(--neon-green); }
-        .tool-btn.active { border-color: var(--neon-green); background: rgba(57, 255, 20, 0.15); }
-        .tool-btn:active { background: #444; }
-        
-        .zoom-controls { position: absolute; bottom: 15px; right: 15px; display: flex; flex-direction: column; gap: 8px; }
-        .zoom-circle { width: 40px; height: 40px; border-radius: 50%; background: rgba(0,0,0,0.8); border: 2px solid var(--neon-green); color: var(--neon-green); font-size: 18px; display: flex; align-items: center; justify-content: center; cursor:pointer;}
+    /* --- SELECT SCREEN --- */
+    .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin: 20px 0; }
+    .option { background: rgba(0,0,0,0.4); border: 2px solid #333; border-radius: 10px; padding: 25px 10px; text-align: center; transition: 0.2s; user-select:none; }
+    .option:active { border-color: var(--neon-green); background: rgba(57, 255, 20, 0.15); box-shadow: 0 0 15px var(--neon-green); }
+    .option i { font-size: 32px; color: #fff; margin-bottom: 10px; }
+    .feature-row { display: flex; align-items: center; margin-bottom: 15px; }
+    .feature-row i { font-size: 20px; color: var(--neon-purple); margin-right: 15px; width: 25px; text-align: center; }
 
-        /* --- TUTORIAL OVERLAY --- */
-        #tutorial-overlay {
-            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
-            background: rgba(0,0,0,0.85); z-index: 500; display: none; justify-content: center; align-items: center; flex-direction: column; text-align: center; backdrop-filter: blur(5px);
-        }
-        .tut-card { background: #111; border: 1px solid var(--neon-green); padding: 25px; border-radius: 15px; width: 85%; box-shadow: 0 0 30px rgba(57, 255, 20, 0.2); }
-        .tut-row { display: flex; align-items: center; margin-bottom: 20px; text-align: left; }
-        .tut-icon { font-size: 30px; width: 50px; text-align: center; margin-right: 15px; }
-        
-        /* --- LOADING --- */
-        #loading-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.95); z-index: 2000; display: none; justify-content: center; align-items: center; flex-direction: column; }
-        .loading-text { font-family: 'Rubik Glitch'; color: var(--neon-green); font-size: 24px; margin-top: 20px; }
-        .scanner-beam { width: 250px; height: 2px; background: var(--neon-green); animation: scan-beam 1.5s infinite linear; box-shadow: 0 0 10px var(--neon-green); }
-        @keyframes scan-beam { 0% { transform: translateY(-50px); opacity:0; } 50% { opacity:1; } 100% { transform: translateY(50px); opacity:0; } }
-        
-        #manual-options { display: none; width: 80%; text-align: center; margin-top: 20px; }
-        .btn-manual { background: transparent; border: 1px solid var(--neon-orange); color: var(--neon-orange); padding: 10px; width: 100%; margin-top: 10px; font-weight:bold; cursor:pointer;}
-    </style>
+    /* --- EDITOR SCREEN --- */
+    #editor-wrapper {
+      flex: 1; position: relative; background: #000; border: 2px solid var(--neon-green);
+      border-radius: 10px; overflow: hidden; margin-bottom: 10px; box-shadow: 0 0 20px rgba(57, 255, 20, 0.1);
+    }
+    canvas { display: block; width: 100%; height: 100%; touch-action: none; }
+
+    .toolbar-main { display: grid; grid-template-columns: repeat(5, 1fr); gap: 5px; margin-bottom: 10px; }
+    .tool-btn {
+      background: rgba(20, 20, 20, 0.9); border: 1px solid #444; color: #fff;
+      padding: 10px 5px; border-radius: 6px; font-family: 'Share Tech Mono'; font-size: 10px;
+      text-align: center; display: flex; flex-direction: column; align-items: center; gap: 5px; cursor:pointer;
+    }
+    .tool-btn i { font-size: 16px; color: var(--neon-green); }
+    .tool-btn.active { border-color: var(--neon-green); background: rgba(57, 255, 20, 0.15); }
+    .tool-btn:active { background: #444; }
+
+    .zoom-controls { position: absolute; bottom: 15px; right: 15px; display: flex; flex-direction: column; gap: 8px; }
+    .zoom-circle {
+      width: 40px; height: 40px; border-radius: 50%; background: rgba(0,0,0,0.8);
+      border: 2px solid var(--neon-green); color: var(--neon-green); font-size: 18px;
+      display: flex; align-items: center; justify-content: center; cursor:pointer;
+    }
+
+    /* --- TUTORIAL OVERLAY --- */
+    #tutorial-overlay {
+      position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+      background: rgba(0,0,0,0.85); z-index: 500; display: none; justify-content: center; align-items: center;
+      flex-direction: column; text-align: center; backdrop-filter: blur(5px);
+    }
+    .tut-card { background: #111; border: 1px solid var(--neon-green); padding: 25px; border-radius: 15px; width: 85%; box-shadow: 0 0 30px rgba(57, 255, 20, 0.2); }
+    .tut-row { display: flex; align-items: center; margin-bottom: 20px; text-align: left; }
+    .tut-icon { font-size: 30px; width: 50px; text-align: center; margin-right: 15px; }
+
+    /* --- LOADING --- */
+    #loading-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.95); z-index: 2000; display: none; justify-content: center; align-items: center; flex-direction: column; }
+    .loading-text { font-family: 'Rubik Glitch'; color: var(--neon-green); font-size: 24px; margin-top: 20px; }
+    .scanner-beam { width: 250px; height: 2px; background: var(--neon-green); animation: scan-beam 1.5s infinite linear; box-shadow: 0 0 10px var(--neon-green); }
+    @keyframes scan-beam { 0% { transform: translateY(-50px); opacity:0; } 50% { opacity:1; } 100% { transform: translateY(50px); opacity:0; } }
+
+    #manual-options { display: none; width: 80%; text-align: center; margin-top: 20px; }
+    .btn-manual { background: transparent; border: 1px solid var(--neon-orange); color: var(--neon-orange); padding: 10px; width: 100%; margin-top: 10px; font-weight:bold; cursor:pointer;}
+
+    /* Token warning */
+    .token-warning {
+      background: rgba(255, 51, 51, 0.1);
+      border: 1px solid rgba(255, 51, 51, 0.4);
+      color: #ffb3b3;
+      padding: 10px;
+      border-radius: 10px;
+      font-family: "Share Tech Mono";
+      font-size: 12px;
+      line-height: 1.4;
+      margin: 10px 0 0 0;
+      display: none;
+    }
+  </style>
 </head>
+
 <body>
+  <div class="scanlines"></div>
+  <div class="trippy-bg"></div>
+  <div class="grid-bg"></div>
 
-    <div class="scanlines"></div>
-    <div class="trippy-bg"></div>
-    <div class="grid-bg"></div>
-    
-    <div id="loading-overlay">
-        <i class="fas fa-eye" style="font-size: 50px; color: #333;"></i>
-        <div class="scanner-beam"></div>
-        <div class="loading-text" id="loading-msg">ANALYZING...</div>
-        <div id="manual-options">
-            <button class="btn btn-manual" onclick="forceEditor()">SKIP AI CHECK</button>
+  <div id="loading-overlay">
+    <i class="fas fa-eye" style="font-size: 50px; color: #333;"></i>
+    <div class="scanner-beam"></div>
+    <div class="loading-text" id="loading-msg">ANALYZING...</div>
+    <div id="manual-options">
+      <button class="btn btn-manual" onclick="forceEditor()">SKIP AI CHECK</button>
+    </div>
+  </div>
+
+  <div class="app-container">
+    <div id="screen-landing" class="screen active">
+      <div class="header">
+        <i class="fas fa-cannabis logo-icon"></i>
+        <div class="brand-name">STONEY<br>BALONEY</div>
+        <div class="chill-text">// SECURE_VERIFY_V6</div>
+
+        <div id="tokenWarning" class="token-warning">
+          ⚠️ Missing <b>?token=</b> in the link.<br/>
+          This page must be opened from the Discord ticket verification link.
         </div>
+      </div>
+
+      <div style="flex:1; display:flex; align-items:center;">
+        <div class="card" style="width:100%;">
+          <div class="feature-row">
+            <i class="fas fa-search"></i>
+            <div>
+              <h3 style="color:var(--neon-green);">Smart Scan</h3>
+              <p style="color:#aaa;">Auto-detects face area.</p>
+            </div>
+          </div>
+
+          <div class="feature-row">
+            <i class="fas fa-hand-pointer"></i>
+            <div>
+              <h3 style="color:var(--neon-purple);">Pro Editor</h3>
+              <p style="color:#aaa;">Zoom, Pan & Redact.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <button id="startBtn" class="btn" onclick="goToScreen('screen-select')">START</button>
     </div>
 
-    <div class="app-container">
-        
-        <div id="screen-landing" class="screen active">
-            <div class="header">
-                <i class="fas fa-cannabis logo-icon"></i>
-                <div class="brand-name">STONEY<br>BALONEY</div>
-                <div class="chill-text">// SECURE_VERIFY_V6</div>
-            </div>
-            <div style="flex:1; display:flex; align-items:center;">
-                <div class="card" style="width:100%;">
-                    <div class="feature-row"><i class="fas fa-search"></i><div><h3 style="color:var(--neon-green);">Smart Scan</h3><p style="color:#aaa;">Auto-detects ID.</p></div></div>
-                    <div class="feature-row"><i class="fas fa-hand-pointer"></i><div><h3 style="color:var(--neon-purple);">Pro Editor</h3><p style="color:#aaa;">Zoom, Pan & Redact.</p></div></div>
-                </div>
-            </div>
-            <button class="btn" onclick="goToScreen('screen-select')">START</button>
+    <div id="screen-select" class="screen">
+      <div class="header">
+        <h2 style="font-family:'Rubik Glitch'; color:#fff;">UPLOAD ID</h2>
+      </div>
+
+      <div style="flex:1; display:flex; flex-direction:column; justify-content:center;">
+        <div class="grid">
+          <div class="option" onclick="triggerUpload()"><i class="far fa-id-card"></i><div>ID CARD</div></div>
+          <div class="option" onclick="triggerUpload()"><i class="fas fa-passport"></i><div>PASSPORT</div></div>
         </div>
+      </div>
 
-        <div id="screen-select" class="screen">
-            <div class="header">
-                <h2 style="font-family:'Rubik Glitch'; color:#fff;">UPLOAD ID</h2>
-            </div>
-            <div style="flex:1; display:flex; flex-direction:column; justify-content:center;">
-                <div class="grid">
-                    <div class="option" onclick="triggerUpload()"><i class="far fa-id-card"></i><div>ID CARD</div></div>
-                    <div class="option" onclick="triggerUpload()"><i class="fas fa-passport"></i><div>PASSPORT</div></div>
-                </div>
-            </div>
-
-            <!-- ✅ Camera option restored -->
-            <input type="file" id="fileInput" accept="image/*" capture="environment" onchange="handleImage(this)" style="display:none;">
-        </div>
-
-        <div id="screen-edit" class="screen">
-            <div style="text-align:center; margin-bottom: 5px;">
-                <span style="color:var(--neon-green); font-family:'Share Tech Mono';">SECURE EDITOR ACTIVE</span>
-            </div>
-
-            <div id="editor-wrapper">
-                <canvas id="canvas"></canvas>
-                
-                <div id="tutorial-overlay" onclick="closeTutorial()">
-                    <div class="tut-card">
-                        <h3 style="color:#fff; margin-bottom:20px;">CONTROLS</h3>
-                        <div class="tut-row">
-                            <div class="tut-icon">👆</div>
-                            <div><strong style="color:var(--neon-green)">ONE FINGER</strong><br><span style="color:#aaa; font-size:12px;">Draw Black Line</span></div>
-                        </div>
-                        <div class="tut-row">
-                            <div class="tut-icon">✌️</div>
-                            <div><strong style="color:var(--neon-purple)">TWO FINGERS</strong><br><span style="color:#aaa; font-size:12px;">Pinch to Zoom / Move</span></div>
-                        </div>
-                        <button class="btn" style="font-size:16px; padding:10px;">GOT IT</button>
-                    </div>
-                </div>
-
-                <div class="zoom-controls">
-                    <div class="zoom-circle" onclick="zoomIn()"><i class="fas fa-plus"></i></div>
-                    <div class="zoom-circle" onclick="zoomOut()"><i class="fas fa-minus"></i></div>
-                </div>
-            </div>
-
-            <div class="toolbar-main">
-                <div class="tool-btn" onclick="setBrush(10, this)">
-                    <i class="fas fa-circle" style="font-size:8px;"></i>
-                    <span>SMALL</span>
-                </div>
-                <div class="tool-btn active" onclick="setBrush(30, this)">
-                    <i class="fas fa-circle" style="font-size:14px;"></i>
-                    <span>MED</span>
-                </div>
-                <div class="tool-btn" onclick="setBrush(60, this)">
-                    <i class="fas fa-circle" style="font-size:20px;"></i>
-                    <span>LARGE</span>
-                </div>
-                <div class="tool-btn" onclick="undoLast()">
-                    <i class="fas fa-undo"></i>
-                    <span>UNDO</span>
-                </div>
-                <div class="tool-btn" onclick="rotateImage()">
-                    <i class="fas fa-redo"></i>
-                    <span>TURN</span>
-                </div>
-            </div>
-
-            <button id="submitBtn" class="btn" onclick="finishVerification()">UPLOAD SECURELY</button>
-        </div>
-
-        <div id="screen-success" class="screen" style="justify-content:center; align-items:center; text-align:center;">
-            <i class="fas fa-check-circle" style="font-size: 80px; color: var(--neon-green); margin-bottom:20px;"></i>
-            <h1 style="font-family:'Rubik Glitch';">SENT!</h1>
-            <p id="success-msg" style="color:#aaa;">Verification Pending...</p>
-            <button class="btn" onclick="location.reload()" style="margin-top:40px; background:transparent; border:1px solid #333;">NEW UPLOAD</button>
-        </div>
+      <!-- ✅ Better cross-device camera support -->
+      <input type="file" id="fileInput" accept="image/*" capture onchange="handleImage(this)" style="display:none;">
     </div>
 
-    <script>
-        // ✅ NEW: token-driven routing (no hardcoded webhook)
-        let VERIFY_TOKEN = null;
+    <div id="screen-edit" class="screen">
+      <div style="text-align:center; margin-bottom: 5px;">
+        <span style="color:var(--neon-green); font-family:'Share Tech Mono';">SECURE EDITOR ACTIVE</span>
+      </div>
 
-        // STATE
-        let img = new Image();
-        let strokes = []; // {points:[{x,y}], size}
-        let currentStroke = [];
-        let view = { x: 0, y: 0, scale: 1 }; 
-        let brushSize = 30; // Image-relative brush size
-        let currentRotation = 0;
-        
-        let isDrawing = false;
-        let isPinching = false;
-        let lastDist = 0;
-        let lastTouch = { x:0, y:0 };
-        
-        // AI State
-        let faceModel = null;
-        let scanTimer = null;
-        let aiResult = "SKIPPED";
+      <div id="editor-wrapper">
+        <canvas id="canvas"></canvas>
 
-        // --- INIT ---
-        window.onload = async () => {
-            // ✅ Require ?token=
-            const params = new URLSearchParams(window.location.search);
-            VERIFY_TOKEN = params.get('token');
+        <div id="tutorial-overlay" onclick="closeTutorial()">
+          <div class="tut-card">
+            <h3 style="color:#fff; margin-bottom:20px;">CONTROLS</h3>
+            <div class="tut-row">
+              <div class="tut-icon">👆</div>
+              <div><strong style="color:var(--neon-green)">ONE FINGER</strong><br><span style="color:#aaa; font-size:12px;">Draw Black Line</span></div>
+            </div>
+            <div class="tut-row">
+              <div class="tut-icon">✌️</div>
+              <div><strong style="color:var(--neon-purple)">TWO FINGERS</strong><br><span style="color:#aaa; font-size:12px;">Pinch to Zoom / Move</span></div>
+            </div>
+            <button class="btn" style="font-size:16px; padding:10px;">GOT IT</button>
+          </div>
+        </div>
 
-            if(!VERIFY_TOKEN) {
-                alert("LINK EXPIRED or INVALID. Please re-run /verify in Discord.");
-                // Keep UI usable but prevent upload later
-            }
+        <div class="zoom-controls">
+          <div class="zoom-circle" onclick="zoomIn()"><i class="fas fa-plus"></i></div>
+          <div class="zoom-circle" onclick="zoomOut()"><i class="fas fa-minus"></i></div>
+        </div>
+      </div>
 
-            try { faceModel = await blazeface.load(); console.log("AI Ready"); } 
-            catch(e) { console.log("AI Failed"); }
+      <div class="toolbar-main">
+        <div class="tool-btn" onclick="setBrush(10, this)">
+          <i class="fas fa-circle" style="font-size:8px;"></i>
+          <span>SMALL</span>
+        </div>
+        <div class="tool-btn active" onclick="setBrush(30, this)">
+          <i class="fas fa-circle" style="font-size:14px;"></i>
+          <span>MED</span>
+        </div>
+        <div class="tool-btn" onclick="setBrush(60, this)">
+          <i class="fas fa-circle" style="font-size:20px;"></i>
+          <span>LARGE</span>
+        </div>
+        <div class="tool-btn" onclick="undoLast()">
+          <i class="fas fa-undo"></i>
+          <span>UNDO</span>
+        </div>
+        <div class="tool-btn" onclick="rotateImage()">
+          <i class="fas fa-redo"></i>
+          <span>TURN</span>
+        </div>
+      </div>
+
+      <button id="submitBtn" class="btn" onclick="finishVerification()">UPLOAD SECURELY</button>
+    </div>
+
+    <div id="screen-success" class="screen" style="justify-content:center; align-items:center; text-align:center;">
+      <i class="fas fa-check-circle" style="font-size: 80px; color: var(--neon-green); margin-bottom:20px;"></i>
+      <h1 style="font-family:'Rubik Glitch';">SENT!</h1>
+      <p id="success-msg" style="color:#aaa;">Verification Pending...</p>
+      <button class="btn" onclick="location.reload()" style="margin-top:40px; background:transparent; border:1px solid #333;">NEW UPLOAD</button>
+    </div>
+  </div>
+
+  <script>
+    // =========================
+    // TOKEN + STATE
+    // =========================
+    let VERIFY_TOKEN = null;
+
+    let img = new Image();
+    let strokes = []; // {points:[{x,y}], size}
+    let currentStroke = [];
+    let view = { x: 0, y: 0, scale: 1 };
+    let brushSize = 30;
+    let currentRotation = 0;
+
+    let isDrawing = false;
+    let isPinching = false;
+    let lastDist = 0;
+    let lastTouch = { x:0, y:0 };
+
+    let faceModel = null;
+    let scanTimer = null;
+    let aiResult = "SKIPPED";
+
+    // These handlers need to be bound AFTER editor opens (fixes random null/ghost bugs)
+    let editorListenersBound = false;
+
+    window.onload = async () => {
+      const params = new URLSearchParams(window.location.search);
+      VERIFY_TOKEN = params.get("token");
+
+      // Lock if missing token
+      if (!VERIFY_TOKEN) {
+        document.getElementById("tokenWarning").style.display = "block";
+        const startBtn = document.getElementById("startBtn");
+        if (startBtn) startBtn.disabled = true;
+      }
+
+      try { faceModel = await blazeface.load(); console.log("AI Ready"); }
+      catch(e) { console.log("AI Failed", e); }
+    };
+
+    function goToScreen(id) {
+      document.querySelectorAll(".screen").forEach(s => s.classList.remove("active"));
+      document.getElementById(id).classList.add("active");
+    }
+
+    function triggerUpload() {
+      if (!VERIFY_TOKEN) {
+        alert("Invalid link. Please open the verify link from Discord (it must include ?token=).");
+        return;
+      }
+      document.getElementById("fileInput").click();
+    }
+
+    function handleImage(input) {
+      if (!input.files || !input.files[0]) return;
+
+      const file = input.files[0];
+
+      document.getElementById("loading-overlay").style.display = "flex";
+      document.getElementById("manual-options").style.display = "none";
+      document.getElementById("loading-msg").innerText = "SCANNING...";
+
+      scanTimer = setTimeout(() => {
+        document.getElementById("manual-options").style.display = "block";
+        document.getElementById("loading-msg").innerText = "AI STUCK?";
+      }, 3500);
+
+      const url = URL.createObjectURL(file);
+      img.onload = () => {
+        const aiCan = document.createElement("canvas");
+        const scale = Math.min(1, 400 / img.width);
+        aiCan.width = Math.max(1, Math.floor(img.width * scale));
+        aiCan.height = Math.max(1, Math.floor(img.height * scale));
+        aiCan.getContext("2d").drawImage(img, 0, 0, aiCan.width, aiCan.height);
+        runAI(aiCan);
+      };
+      img.src = url;
+    }
+
+    async function runAI(canvasRef) {
+      try {
+        if (!faceModel) faceModel = await blazeface.load();
+        const preds = await faceModel.estimateFaces(canvasRef, false);
+
+        if (preds && preds.length > 0) {
+          aiResult = "VERIFIED";
+          forceEditor();
+        } else {
+          aiResult = "NOT_DETECTED";
+          if (confirm("No face detected. Is this a valid ID?")) forceEditor();
+          else location.reload();
+        }
+      } catch(e) {
+        aiResult = "SKIPPED";
+        forceEditor();
+      }
+    }
+
+    function forceEditor() {
+      clearTimeout(scanTimer);
+      document.getElementById("loading-overlay").style.display = "none";
+      goToScreen("screen-edit");
+
+      strokes = [];
+      currentStroke = [];
+      isDrawing = false;
+      isPinching = false;
+      currentRotation = 0;
+
+      const wrapper = document.getElementById("editor-wrapper");
+      const canvas = document.getElementById("canvas");
+
+      const dpr = window.devicePixelRatio || 1;
+      canvas.width = Math.max(1, Math.floor(wrapper.clientWidth * dpr));
+      canvas.height = Math.max(1, Math.floor(wrapper.clientHeight * dpr));
+
+      const ratio = Math.min(canvas.width / img.width, canvas.height / img.height);
+      const s = ratio * 0.9;
+
+      view = {
+        scale: s,
+        x: (canvas.width - img.width * s) / 2,
+        y: (canvas.height - img.height * s) / 2
+      };
+
+      // ✅ Bind touch listeners here (fixes the "sometimes dead" issue)
+      bindEditorListeners();
+
+      document.getElementById("tutorial-overlay").style.display = "flex";
+      render();
+    }
+
+    function closeTutorial() {
+      document.getElementById("tutorial-overlay").style.display = "none";
+    }
+
+    function bindEditorListeners() {
+      if (editorListenersBound) return;
+      editorListenersBound = true;
+
+      const canvasEl = document.getElementById("canvas");
+
+      function toWorld(tx, ty) {
+        let x = (tx * (window.devicePixelRatio||1) - view.x) / view.scale;
+        let y = (ty * (window.devicePixelRatio||1) - view.y) / view.scale;
+
+        const cx = img.width / 2, cy = img.height / 2;
+        const rad = -currentRotation * Math.PI / 180;
+        const dx = x - cx, dy = y - cy;
+
+        return {
+          x: cx + dx * Math.cos(rad) - dy * Math.sin(rad),
+          y: cy + dx * Math.sin(rad) + dy * Math.cos(rad)
         };
+      }
 
-        function goToScreen(id) {
-            document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
-            document.getElementById(id).classList.add('active');
+      canvasEl.addEventListener("touchstart", e => {
+        e.preventDefault();
+
+        if (e.touches.length === 2) {
+          isPinching = true;
+          isDrawing = false;
+          currentStroke = [];
+
+          lastDist = Math.hypot(
+            e.touches[0].clientX - e.touches[1].clientX,
+            e.touches[0].clientY - e.touches[1].clientY
+          );
+
+          lastTouch = {
+            x: (e.touches[0].clientX + e.touches[1].clientX) / 2,
+            y: (e.touches[0].clientY + e.touches[1].clientY) / 2
+          };
+
+        } else if (e.touches.length === 1 && !isPinching) {
+          isDrawing = true;
+          const rect = canvasEl.getBoundingClientRect();
+          const pt = toWorld(e.touches[0].clientX - rect.left, e.touches[0].clientY - rect.top);
+          currentStroke = [pt];
         }
+      }, { passive:false });
 
-        // --- UPLOAD FLOW ---
-        function triggerUpload() { document.getElementById('fileInput').click(); }
+      canvasEl.addEventListener("touchmove", e => {
+        e.preventDefault();
 
-        function handleImage(input) {
-            if (!input.files[0]) return;
-            const file = input.files[0];
-            
-            // UI Reset
-            document.getElementById('loading-overlay').style.display = 'flex';
-            document.getElementById('manual-options').style.display = 'none';
-            document.getElementById('loading-msg').innerText = "SCANNING...";
-            
-            // Failsafe
-            scanTimer = setTimeout(() => {
-                document.getElementById('manual-options').style.display = 'block';
-                document.getElementById('loading-msg').innerText = "AI STUCK?";
-            }, 3500);
+        if (isPinching && e.touches.length === 2) {
+          const dist = Math.hypot(
+            e.touches[0].clientX - e.touches[1].clientX,
+            e.touches[0].clientY - e.touches[1].clientY
+          );
 
-            const url = URL.createObjectURL(file);
-            img.onload = () => {
-                // Resize for AI check only
-                const aiCan = document.createElement('canvas');
-                const scale = Math.min(1, 400 / img.width);
-                aiCan.width = img.width * scale;
-                aiCan.height = img.height * scale;
-                aiCan.getContext('2d').drawImage(img, 0,0, aiCan.width, aiCan.height);
-                
-                runAI(aiCan);
-            };
-            img.src = url;
+          const cx = (e.touches[0].clientX + e.touches[1].clientX) / 2;
+          const cy = (e.touches[0].clientY + e.touches[1].clientY) / 2;
+
+          view.x += (cx - lastTouch.x) * (window.devicePixelRatio||1);
+          view.y += (cy - lastTouch.y) * (window.devicePixelRatio||1);
+          lastTouch = { x: cx, y: cy };
+
+          const delta = dist - lastDist;
+          view.scale *= (1 + delta * 0.005);
+          lastDist = dist;
+
+          render();
+
+        } else if (isDrawing && e.touches.length === 1) {
+          const rect = canvasEl.getBoundingClientRect();
+          const pt = toWorld(e.touches[0].clientX - rect.left, e.touches[0].clientY - rect.top);
+          currentStroke.push(pt);
+          render();
         }
+      }, { passive:false });
 
-        async function runAI(canvasRef) {
-            try {
-                if(!faceModel) faceModel = await blazeface.load();
-                const preds = await faceModel.estimateFaces(canvasRef, false);
-                
-                if (preds.length > 0) {
-                    aiResult = "VERIFIED";
-                    forceEditor();
-                } else {
-                    aiResult = "NOT_DETECTED";
-                    if(confirm("No face detected. Is this a valid ID?")) forceEditor();
-                    else { location.reload(); }
-                }
-            } catch(e) {
-                aiResult = "SKIPPED";
-                forceEditor();
+      canvasEl.addEventListener("touchend", e => {
+        if (e.touches.length === 0) {
+          if (isDrawing && currentStroke.length > 0) {
+            strokes.push({ points: currentStroke, size: brushSize });
+          }
+          isDrawing = false;
+          isPinching = false;
+          currentStroke = [];
+          render();
+        }
+      }, { passive:false });
+    }
+
+    function render() {
+      const canvas = document.getElementById("canvas");
+      const ctx = canvas.getContext("2d");
+
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      ctx.save();
+      ctx.translate(view.x, view.y);
+      ctx.scale(view.scale, view.scale);
+
+      ctx.translate(img.width/2, img.height/2);
+      ctx.rotate(currentRotation * Math.PI / 180);
+      ctx.translate(-img.width/2, -img.height/2);
+
+      ctx.drawImage(img, 0, 0);
+
+      ctx.lineCap = "round";
+      ctx.lineJoin = "round";
+      ctx.strokeStyle = "#000";
+
+      strokes.forEach(strokeData => {
+        if (!strokeData.points || strokeData.points.length < 2) return;
+        ctx.lineWidth = strokeData.size;
+        ctx.beginPath();
+        ctx.moveTo(strokeData.points[0].x, strokeData.points[0].y);
+        for (let i=1; i<strokeData.points.length; i++) ctx.lineTo(strokeData.points[i].x, strokeData.points[i].y);
+        ctx.stroke();
+      });
+
+      if (currentStroke.length > 0) {
+        ctx.lineWidth = brushSize;
+        ctx.beginPath();
+        ctx.moveTo(currentStroke[0].x, currentStroke[0].y);
+        for (let i=1; i<currentStroke.length; i++) ctx.lineTo(currentStroke[i].x, currentStroke[i].y);
+        ctx.stroke();
+      }
+
+      ctx.restore();
+    }
+
+    function zoomIn() { view.scale *= 1.2; render(); }
+    function zoomOut() { view.scale *= 0.8; render(); }
+    function rotateImage() { currentRotation = (currentRotation + 90) % 360; render(); }
+    function undoLast() { strokes.pop(); render(); }
+    function resetCanvas() { strokes = []; render(); }
+    function setBrush(s, btn) {
+      brushSize = s;
+      document.querySelectorAll(".tool-btn").forEach(b => b.classList.remove("active"));
+      btn.classList.add("active");
+    }
+
+    function finishVerification() {
+      if (!VERIFY_TOKEN) {
+        alert("Invalid link. Please re-run /verify in Discord.");
+        return;
+      }
+
+      const btn = document.getElementById("submitBtn");
+      btn.innerHTML = "ENCRYPTING...";
+      btn.disabled = true;
+
+      const outCan = document.createElement("canvas");
+      outCan.width = img.width;
+      outCan.height = img.height;
+      const ctx = outCan.getContext("2d");
+
+      // draw rotated image
+      ctx.save();
+      ctx.translate(img.width/2, img.height/2);
+      ctx.rotate(currentRotation * Math.PI / 180);
+      ctx.translate(-img.width/2, -img.height/2);
+      ctx.drawImage(img, 0, 0);
+      ctx.restore();
+
+      // draw strokes in rotated context
+      ctx.save();
+      ctx.translate(img.width/2, img.height/2);
+      ctx.rotate(currentRotation * Math.PI / 180);
+      ctx.translate(-img.width/2, -img.height/2);
+
+      ctx.lineCap = "round";
+      ctx.lineJoin = "round";
+      ctx.strokeStyle = "#000";
+
+      strokes.forEach(s => {
+        ctx.lineWidth = s.size;
+        ctx.beginPath();
+        if (s.points.length > 0) ctx.moveTo(s.points[0].x, s.points[0].y);
+        for (let i=1; i<s.points.length; i++) ctx.lineTo(s.points[i].x, s.points[i].y);
+        ctx.stroke();
+      });
+
+      ctx.restore();
+
+      outCan.toBlob(blob => {
+        const form = new FormData();
+        form.append("file", blob, "stoney_verify.png");
+        form.append("token", VERIFY_TOKEN);
+        form.append("status", aiResult);
+
+        fetch("/api/verify", { method: "POST", body: form })
+          .then(async res => {
+            const data = await res.json().catch(() => ({}));
+            if (res.ok && data.success) {
+              goToScreen("screen-success");
+            } else {
+              throw new Error(data.error || "Server rejected upload");
             }
-        }
+          })
+          .catch(err => {
+            alert("Upload Error: " + err.message);
+            btn.disabled = false;
+            btn.innerHTML = "UPLOAD SECURELY";
+          });
+      }, "image/png");
 
-        function forceEditor() {
-            clearTimeout(scanTimer);
-            document.getElementById('loading-overlay').style.display = 'none';
-            goToScreen('screen-edit');
-            
-            strokes = [];
-            
-            // INIT EDITOR
-            const wrapper = document.getElementById('editor-wrapper');
-            const canvas = document.getElementById('canvas');
-            
-            // HIGH DPI FIX
-            const dpr = window.devicePixelRatio || 1;
-            canvas.width = wrapper.clientWidth * dpr;
-            canvas.height = wrapper.clientHeight * dpr;
-
-            // Fit image
-            const ratio = Math.min(canvas.width/img.width, canvas.height/img.height);
-            view = {
-                scale: ratio * 0.9, 
-                x: (canvas.width - img.width * (ratio*0.9)) / 2,
-                y: (canvas.height - img.height * (ratio*0.9)) / 2
-            };
-            
-            document.getElementById('tutorial-overlay').style.display = 'flex';
-            render();
-        }
-
-        function closeTutorial() {
-            document.getElementById('tutorial-overlay').style.display = 'none';
-        }
-
-        // --- RENDER ENGINE (Pro Zoom + High DPI) ---
-        function render() {
-            const canvas = document.getElementById('canvas');
-            const ctx = canvas.getContext('2d');
-            
-            // Clear
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
-            
-            // Transform Camera
-            ctx.save();
-            ctx.translate(view.x, view.y);
-            ctx.scale(view.scale, view.scale);
-            
-            // Rotation (Center Pivot)
-            ctx.translate(img.width/2, img.height/2);
-            ctx.rotate(currentRotation * Math.PI / 180);
-            ctx.translate(-img.width/2, -img.height/2);
-            
-            // Draw High-Res Image
-            ctx.drawImage(img, 0, 0);
-            
-            // Draw Strokes
-            ctx.lineCap = 'round';
-            ctx.lineJoin = 'round';
-            ctx.strokeStyle = '#000';
-
-            // Draw existing history
-            strokes.forEach(strokeData => {
-                if(strokeData.points.length < 2) return;
-                ctx.lineWidth = strokeData.size; // Fixed size relative to image
-                ctx.beginPath();
-                ctx.moveTo(strokeData.points[0].x, strokeData.points[0].y);
-                for(let i=1; i<strokeData.points.length; i++) ctx.lineTo(strokeData.points[i].x, strokeData.points[i].y);
-                ctx.stroke();
-            });
-
-            // Draw current
-            if(currentStroke.length > 0) {
-                ctx.lineWidth = brushSize; 
-                ctx.beginPath();
-                ctx.moveTo(currentStroke[0].x, currentStroke[0].y);
-                for(let i=1; i<currentStroke.length; i++) ctx.lineTo(currentStroke[i].x, currentStroke[i].y);
-                ctx.stroke();
-            }
-
-            ctx.restore();
-        }
-
-        // --- INPUT LOGIC (Pinch Fix) ---
-        const canvasEl = document.getElementById('canvas');
-
-        function toWorld(tx, ty) {
-            // Simple Inverse Camera
-            let x = (tx * (window.devicePixelRatio||1) - view.x) / view.scale;
-            let y = (ty * (window.devicePixelRatio||1) - view.y) / view.scale;
-            
-            // Inverse Rotation
-            const cx = img.width/2; const cy = img.height/2;
-            const rad = -currentRotation * Math.PI / 180;
-            const dx = x - cx; const dy = y - cy;
-            
-            return {
-                x: cx + dx * Math.cos(rad) - dy * Math.sin(rad),
-                y: cy + dx * Math.sin(rad) + dy * Math.cos(rad)
-            };
-        }
-
-        canvasEl.addEventListener('touchstart', e => {
-            e.preventDefault();
-            if(e.touches.length === 2) {
-                isPinching = true;
-                isDrawing = false;
-                currentStroke = []; // Cancel drawing immediately
-                lastDist = Math.hypot(
-                    e.touches[0].clientX - e.touches[1].clientX,
-                    e.touches[0].clientY - e.touches[1].clientY
-                );
-                lastTouch = {
-                    x: (e.touches[0].clientX + e.touches[1].clientX)/2,
-                    y: (e.touches[0].clientY + e.touches[1].clientY)/2
-                };
-            } else if (e.touches.length === 1 && !isPinching) {
-                isDrawing = true;
-                const rect = canvasEl.getBoundingClientRect();
-                const pt = toWorld(
-                    e.touches[0].clientX - rect.left,
-                    e.touches[0].clientY - rect.top
-                );
-                currentStroke = [pt];
-            }
-        }, {passive:false});
-
-        canvasEl.addEventListener('touchmove', e => {
-            e.preventDefault();
-            if(isPinching && e.touches.length === 2) {
-                // Zoom / Pan
-                const dist = Math.hypot(
-                    e.touches[0].clientX - e.touches[1].clientX,
-                    e.touches[0].clientY - e.touches[1].clientY
-                );
-                const cx = (e.touches[0].clientX + e.touches[1].clientX)/2;
-                const cy = (e.touches[0].clientY + e.touches[1].clientY)/2;
-                
-                // Pan
-                view.x += (cx - lastTouch.x) * (window.devicePixelRatio||1);
-                view.y += (cy - lastTouch.y) * (window.devicePixelRatio||1);
-                lastTouch = {x:cx, y:cy};
-
-                // Zoom
-                const delta = dist - lastDist;
-                view.scale *= (1 + delta * 0.005);
-                lastDist = dist;
-                
-                render();
-            } else if (isDrawing && e.touches.length === 1) {
-                const rect = canvasEl.getBoundingClientRect();
-                const pt = toWorld(
-                    e.touches[0].clientX - rect.left,
-                    e.touches[0].clientY - rect.top
-                );
-                currentStroke.push(pt);
-                render();
-            }
-        }, {passive:false});
-
-        canvasEl.addEventListener('touchend', e => {
-            if(e.touches.length === 0) {
-                if(isDrawing && currentStroke.length > 0) {
-                    strokes.push({points: currentStroke, size: brushSize});
-                }
-                isDrawing = false;
-                isPinching = false;
-                currentStroke = [];
-                render();
-            }
-        });
-
-        // --- TOOLS ---
-        function zoomIn() { view.scale *= 1.2; render(); }
-        function zoomOut() { view.scale *= 0.8; render(); }
-        function rotateImage() { currentRotation = (currentRotation + 90) % 360; render(); }
-        function undoLast() { strokes.pop(); render(); }
-        function resetCanvas() { strokes = []; render(); }
-        function setBrush(s, btn) { 
-            brushSize = s; 
-            document.querySelectorAll('.tool-btn').forEach(b => b.classList.remove('active'));
-            btn.classList.add('active');
-        }
-
-        // --- SUBMIT ---
-        function finishVerification() {
-            if(!VERIFY_TOKEN) {
-                alert("Invalid link. Please re-run /verify in Discord.");
-                return;
-            }
-
-            const btn = document.getElementById('submitBtn');
-            btn.innerHTML = "ENCRYPTING...";
-            btn.disabled = true;
-
-            // RENDER FINAL OUTPUT (High Res)
-            const outCan = document.createElement('canvas');
-            outCan.width = img.width;
-            outCan.height = img.height;
-            const ctx = outCan.getContext('2d');
-            
-            // Draw rotated image
-            ctx.save();
-            ctx.translate(img.width/2, img.height/2);
-            ctx.rotate(currentRotation * Math.PI / 180);
-            ctx.translate(-img.width/2, -img.height/2);
-            ctx.drawImage(img, 0, 0);
-            ctx.restore();
-            
-            // Draw strokes (baked rotation)
-            ctx.save();
-            ctx.translate(img.width/2, img.height/2);
-            ctx.rotate(currentRotation * Math.PI / 180);
-            ctx.translate(-img.width/2, -img.height/2);
-            
-            ctx.lineCap = 'round';
-            ctx.lineJoin = 'round';
-            ctx.strokeStyle = '#000';
-            
-            strokes.forEach(s => {
-                ctx.lineWidth = s.size;
-                ctx.beginPath();
-                if(s.points.length>0) ctx.moveTo(s.points[0].x, s.points[0].y);
-                for(let i=1; i<s.points.length; i++) ctx.lineTo(s.points[i].x, s.points[i].y);
-                ctx.stroke();
-            });
-            ctx.restore();
-
-            outCan.toBlob(blob => {
-                const form = new FormData();
-                form.append('file', blob, 'stoney_verify.png');
-                form.append('token', VERIFY_TOKEN);
-                form.append('status', aiResult);
-
-                fetch('/api/verify', { method:'POST', body: form })
-                .then(async res => {
-                    const data = await res.json().catch(() => ({}));
-                    if(res.ok && data.success) {
-                        goToScreen('screen-success');
-                    } else {
-                        throw new Error(data.error || "Server rejected upload");
-                    }
-                })
-                .catch(err => {
-                    alert("Upload Error: " + err.message);
-                    btn.disabled = false;
-                    btn.innerHTML = "UPLOAD SECURELY";
-                });
-            }, 'image/png');
-        }
-    </script>
+    }
+  </script>
 </body>
 </html>

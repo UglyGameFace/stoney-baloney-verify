@@ -544,18 +544,25 @@
     // =========================
     // ✅ Upload: compress so Discord accepts it
     // =========================
-    function finishVerification() {
+    <script>
+function finishVerification() {
   if (!VERIFY_TOKEN) {
     alert("Invalid link. Please re-run /verify in Discord.");
     return;
+  }
+
+  // ✅ capture last stroke if user uploads while drawing
+  if (isDrawing && currentStroke && currentStroke.length > 1) {
+    strokes.push({ points: currentStroke, size: brushSize });
+    currentStroke = [];
+    isDrawing = false;
   }
 
   const btn = document.getElementById("submitBtn");
   btn.innerHTML = "UPLOADING...";
   btn.disabled = true;
 
-  // --- 1) Render output at a SAFE size ---
-  const MAX_DIM = 1280; // keeps uploads small + fast on mobile
+  const MAX_DIM = 1280;
   const scaleOut = Math.min(1, MAX_DIM / Math.max(img.width, img.height));
 
   const outCan = document.createElement("canvas");
@@ -564,19 +571,15 @@
 
   const ctx = outCan.getContext("2d");
 
-  // IMPORTANT: draw everything using original coordinates, but scale the whole canvas output
   ctx.save();
   ctx.scale(scaleOut, scaleOut);
 
-  // apply rotation around ORIGINAL center
   ctx.translate(img.width / 2, img.height / 2);
   ctx.rotate(currentRotation * Math.PI / 180);
   ctx.translate(-img.width / 2, -img.height / 2);
 
-  // draw base image
   ctx.drawImage(img, 0, 0);
 
-  // draw redaction strokes
   ctx.lineCap = "round";
   ctx.lineJoin = "round";
   ctx.strokeStyle = "#000";
@@ -592,7 +595,6 @@
 
   ctx.restore();
 
-  // --- 2) Export as JPEG (much smaller than PNG) ---
   const MIME = "image/jpeg";
   const QUALITY = 0.85;
 
@@ -600,10 +602,8 @@
     try {
       if (!blob) throw new Error("Could not create image blob.");
 
-      // Hard safety check (keeps you under platform limits)
-      // 3.5MB is a safe target for Vercel + mobile reliability
       if (blob.size > 3.5 * 1024 * 1024) {
-        throw new Error("Image still too large. Try again (or zoom out more).");
+        throw new Error("Image still too large. Try again with a smaller photo.");
       }
 
       const form = new FormData();
@@ -613,14 +613,14 @@
 
       const res = await fetch("/api/verify", { method: "POST", body: form });
 
-      // Try to read JSON, but don’t crash if it’s not JSON
+      const raw = await res.text();
       let data = {};
-      try { data = await res.json(); } catch (_) {}
+      try { data = JSON.parse(raw); } catch (_) {}
 
       if (res.ok && data.success) {
         goToScreen("screen-success");
       } else {
-        throw new Error(data.error || "Server rejected upload");
+        throw new Error(data.error || raw || "Server rejected upload");
       }
     } catch (err) {
       alert("Upload Error: " + err.message);
@@ -628,7 +628,7 @@
       btn.innerHTML = "UPLOAD SECURELY";
     }
   }, MIME, QUALITY);
-    }
-  </script>
+}
+</script>
 </body>
 </html>

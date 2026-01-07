@@ -1,6 +1,7 @@
 const { createClient } = require("@supabase/supabase-js");
 const formidable = require("formidable");
 const fs = require("fs");
+const FormData = require("form-data");
 
 // ---- CORS ----
 function setCors(req, res) {
@@ -9,29 +10,11 @@ function setCors(req, res) {
   res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
 }
 
-function pickFirst(v) {
-  return Array.isArray(v) ? v[0] : v;
-}
-
-function extFromMime(mime = "") {
-  const m = String(mime).toLowerCase();
-  if (m.includes("jpeg") || m.includes("jpg")) return "jpg";
-  if (m.includes("png")) return "png";
-  if (m.includes("webp")) return "webp";
-  return "bin";
-}
-
 module.exports = async function handler(req, res) {
   setCors(req, res);
 
   if (req.method === "OPTIONS") return res.status(204).end();
   if (req.method !== "POST") return res.status(405).json({ error: "Method not allowed" });
-
-  // Basic sanity check: must be multipart for uploads
-  const ct = String(req.headers["content-type"] || "");
-  if (!ct.toLowerCase().includes("multipart/form-data")) {
-    return res.status(400).json({ error: "Expected multipart/form-data" });
-  }
 
   const supabaseUrl = process.env.SUPABASE_URL;
   const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -44,12 +27,12 @@ module.exports = async function handler(req, res) {
     auth: { persistSession: false },
   });
 
-  // IMPORTANT: size limits (Discord + sanity)
-  // If your IDs are bigger than this, they should be compressed client-side (we already do).
+  // NOTE: add limits so mobile photos don't explode the function
   const form = formidable({
     multiples: false,
     keepExtensions: true,
     maxFileSize: 8 * 1024 * 1024, // 8MB
+    allowEmptyFiles: false,
   });
 
   form.parse(req, async (err, fields, files) => {
@@ -63,16 +46,21 @@ module.exports = async function handler(req, res) {
         });
       }
 
-      const token = pickFirst(fields.token);
-      const status = pickFirst(fields.status);
+      const token = Array.isArray(fields.token) ? fields.token[0] : fields.token;
+      const status = Array.isArray(fields.status) ? fields.status[0] : fields.status;
 
-      // incoming field name from index.html is "file"
-      const uploaded = pickFirst(files.file);
+      const uploaded = Array.isArray(files.file) ? files.file[0] : files.file;
 
       if (!token) return res.status(400).json({ error: "Missing token" });
       if (!uploaded?.filepath) return res.status(400).json({ error: "Missing file" });
 
       tempPath = uploaded.filepath;
+
+      // Basic file sanity
+      const mime = uploaded.mimetype || "image/png";
+      if (!mime.startsWith("image/")) {
+        return res.status(400).json({ error: "File must be an image", details: mime });
+      }
 
       // 1) Lookup token
       const { data: row, error: readErr } = await supabase
@@ -82,7 +70,6 @@ module.exports = async function handler(req, res) {
         .single();
 
       if (readErr || !row) return res.status(400).json({ error: "Invalid token" });
-      if (!row.webhook_url) return res.status(500).json({ error: "Missing webhook_url for token" });
 
       // used === DECIDED (approve/deny), NOT uploaded
       if (row.used) return res.status(400).json({ error: "Token already decided" });
@@ -95,22 +82,11 @@ module.exports = async function handler(req, res) {
         }
       }
 
-      // 3) Read uploaded file from temp
-      const buf = fs.readFileSync(tempPath);
-      const mime = uploaded.mimetype || "application/octet-stream";
-
-      // Guard: sometimes upload can be empty/corrupt
-      if (!buf || buf.length < 100) {
-        return res.status(400).json({ error: "Uploaded file looks empty/corrupt" });
+      if (!row.webhook_url) {
+        return res.status(500).json({ error: "Token row missing webhook_url" });
       }
 
-      // ✅ Node 18+/Vercel: FormData + Blob should exist globally
-      if (typeof FormData === "undefined" || typeof Blob === "undefined") {
-        return res.status(500).json({
-          error: "Server runtime missing FormData/Blob. Ensure Vercel function is Node.js 18+ (not Edge).",
-        });
-      }
-
+      // 3) Build multipart for Discord webhook (ROBUST)
       const fd = new FormData();
 
       fd.append(
@@ -124,24 +100,23 @@ module.exports = async function handler(req, res) {
                 `**Status:** ${status || "UNKNOWN"}\n` +
                 `**Token:** \`${token}\`\n\n` +
                 "Staff: use the Approve/Reject buttons inside the ticket.",
-              footer: { text: `token: ${token}` },
+              footer: { text: `token: \`${token}\`` },
               timestamp: new Date().toISOString(),
             },
           ],
         })
       );
 
-      // ✅ Correct filename + extension based on mime (your index sends jpg now)
-      const ext = extFromMime(mime);
-      const filename = `stoney_verify.${ext}`;
-
-      // ✅ Discord expects: files[0]
-      fd.append("files[0]", new Blob([buf], { type: mime }), filename);
+      // Discord wants files[0]
+      fd.append("files[0]", fs.createReadStream(tempPath), {
+        filename: "stoney_verify.png",
+        contentType: mime,
+      });
 
       const discordRes = await fetch(row.webhook_url, {
         method: "POST",
+        headers: fd.getHeaders(), // ✅ IMPORTANT: sets boundary
         body: fd,
-        // DO NOT set Content-Type manually; fetch will set multipart boundary
       });
 
       const discordText = await discordRes.text().catch(() => "");
@@ -149,8 +124,7 @@ module.exports = async function handler(req, res) {
       if (!discordRes.ok) {
         return res.status(502).json({
           error: "Discord rejected webhook",
-          status: discordRes.status,
-          details: discordText.slice(0, 600),
+          details: discordText.slice(0, 700),
         });
       }
 

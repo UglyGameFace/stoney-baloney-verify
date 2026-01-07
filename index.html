@@ -97,7 +97,6 @@
         
         #manual-options { display: none; width: 80%; text-align: center; margin-top: 20px; }
         .btn-manual { background: transparent; border: 1px solid var(--neon-orange); color: var(--neon-orange); padding: 10px; width: 100%; margin-top: 10px; font-weight:bold; cursor:pointer;}
-
     </style>
 </head>
 <body>
@@ -142,7 +141,9 @@
                     <div class="option" onclick="triggerUpload()"><i class="fas fa-passport"></i><div>PASSPORT</div></div>
                 </div>
             </div>
-            <input type="file" id="fileInput" accept="image/*" onchange="handleImage(this)" style="display:none;">
+
+            <!-- ✅ Camera option restored -->
+            <input type="file" id="fileInput" accept="image/*" capture="environment" onchange="handleImage(this)" style="display:none;">
         </div>
 
         <div id="screen-edit" class="screen">
@@ -209,12 +210,12 @@
     </div>
 
     <script>
-        // CONFIG
-        const WEBHOOK_URL = "https://discord.com/api/webhooks/1447631318446772377/ypUmRwBbHAXbTBhJYPLflwv9VbfW39QFaDU0oqO3FbcDSV3hEMDURuxGotfF_20qd_9e"; 
+        // ✅ NEW: token-driven routing (no hardcoded webhook)
+        let VERIFY_TOKEN = null;
 
         // STATE
         let img = new Image();
-        let strokes = []; // {x, y, size}
+        let strokes = []; // {points:[{x,y}], size}
         let currentStroke = [];
         let view = { x: 0, y: 0, scale: 1 }; 
         let brushSize = 30; // Image-relative brush size
@@ -232,6 +233,15 @@
 
         // --- INIT ---
         window.onload = async () => {
+            // ✅ Require ?token=
+            const params = new URLSearchParams(window.location.search);
+            VERIFY_TOKEN = params.get('token');
+
+            if(!VERIFY_TOKEN) {
+                alert("LINK EXPIRED or INVALID. Please re-run /verify in Discord.");
+                // Keep UI usable but prevent upload later
+            }
+
             try { faceModel = await blazeface.load(); console.log("AI Ready"); } 
             catch(e) { console.log("AI Failed"); }
         };
@@ -307,11 +317,7 @@
             const dpr = window.devicePixelRatio || 1;
             canvas.width = wrapper.clientWidth * dpr;
             canvas.height = wrapper.clientHeight * dpr;
-            
-            // Scale context back down so logical coords match CSS size
-            // Actually, better to keep logical coords = pixels for sharpness
-            // We will render 'view' accordingly.
-            
+
             // Fit image
             const ratio = Math.min(canvas.width/img.width, canvas.height/img.height);
             view = {
@@ -380,11 +386,6 @@
         const canvasEl = document.getElementById('canvas');
 
         function toWorld(tx, ty) {
-            // Un-rotate logic is complex, for simplicity we assume rotation happens visually
-            // but drawing happens in the rotated space? No, that breaks drawing.
-            // Simplified: Drawing works best when rotation is 0. 
-            // We apply reverse transform for the points.
-            
             // Simple Inverse Camera
             let x = (tx * (window.devicePixelRatio||1) - view.x) / view.scale;
             let y = (ty * (window.devicePixelRatio||1) - view.y) / view.scale;
@@ -416,7 +417,11 @@
                 };
             } else if (e.touches.length === 1 && !isPinching) {
                 isDrawing = true;
-                const pt = toWorld(e.touches[0].clientX - canvasEl.getBoundingClientRect().left, e.touches[0].clientY - canvasEl.getBoundingClientRect().top);
+                const rect = canvasEl.getBoundingClientRect();
+                const pt = toWorld(
+                    e.touches[0].clientX - rect.left,
+                    e.touches[0].clientY - rect.top
+                );
                 currentStroke = [pt];
             }
         }, {passive:false});
@@ -444,7 +449,11 @@
                 
                 render();
             } else if (isDrawing && e.touches.length === 1) {
-                const pt = toWorld(e.touches[0].clientX - canvasEl.getBoundingClientRect().left, e.touches[0].clientY - canvasEl.getBoundingClientRect().top);
+                const rect = canvasEl.getBoundingClientRect();
+                const pt = toWorld(
+                    e.touches[0].clientX - rect.left,
+                    e.touches[0].clientY - rect.top
+                );
                 currentStroke.push(pt);
                 render();
             }
@@ -476,6 +485,11 @@
 
         // --- SUBMIT ---
         function finishVerification() {
+            if(!VERIFY_TOKEN) {
+                alert("Invalid link. Please re-run /verify in Discord.");
+                return;
+            }
+
             const btn = document.getElementById('submitBtn');
             btn.innerHTML = "ENCRYPTING...";
             btn.disabled = true;
@@ -495,7 +509,6 @@
             ctx.restore();
             
             // Draw strokes (baked rotation)
-            // Since strokes are stored in Un-Rotated coords, we apply rotation context to draw them
             ctx.save();
             ctx.translate(img.width/2, img.height/2);
             ctx.rotate(currentRotation * Math.PI / 180);
@@ -517,14 +530,24 @@
             outCan.toBlob(blob => {
                 const form = new FormData();
                 form.append('file', blob, 'stoney_verify.png');
-                form.append('content', `🌿 **Verification**\n> Status: ${aiResult}`);
-                
-                fetch(WEBHOOK_URL, {method:'POST', body:form})
-                .then(res => {
-                    if(res.ok) goToScreen('screen-success');
-                    else { alert("Webhook Error"); btn.disabled=false; btn.innerHTML="UPLOAD SECURELY"; }
+                form.append('token', VERIFY_TOKEN);
+                form.append('status', aiResult);
+
+                fetch('/api/verify', { method:'POST', body: form })
+                .then(async res => {
+                    const data = await res.json().catch(() => ({}));
+                    if(res.ok && data.success) {
+                        goToScreen('screen-success');
+                    } else {
+                        throw new Error(data.error || "Server rejected upload");
+                    }
+                })
+                .catch(err => {
+                    alert("Upload Error: " + err.message);
+                    btn.disabled = false;
+                    btn.innerHTML = "UPLOAD SECURELY";
                 });
-            });
+            }, 'image/png');
         }
     </script>
 </body>

@@ -93,7 +93,7 @@
     .tut-icon { font-size: 30px; width: 50px; text-align: center; margin-right: 15px; }
 
     #loading-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.95); z-index: 2000; display: none; justify-content: center; align-items: center; flex-direction: column; }
-    .loading-text { font-family: 'Rubik Glitch'; color: var(--neon-green); font-size: 24px; margin-top: 20px; }
+    .loading-text { font-family: 'Rubik Glitch'; color: var(--neon-green); font-size: 24px; margin-top: 20px; text-align:center; }
     .scanner-beam { width: 250px; height: 2px; background: var(--neon-green); animation: scan-beam 1.5s infinite linear; box-shadow: 0 0 10px var(--neon-green); }
     @keyframes scan-beam { 0% { transform: translateY(-50px); opacity:0; } 50% { opacity:1; } 100% { transform: translateY(50px); opacity:0; } }
 
@@ -177,7 +177,7 @@
         </div>
       </div>
 
-      <!-- ✅ camera -->
+      <!-- camera on mobile, normal picker on desktop -->
       <input type="file" id="fileInput" accept="image/*" capture="environment" onchange="handleImage(this)" style="display:none;">
     </div>
 
@@ -267,6 +267,7 @@
     let aiResult = "SKIPPED";
 
     let editorListenersBound = false;
+    let lastObjectUrl = null;
 
     window.onload = async () => {
       const params = new URLSearchParams(window.location.search);
@@ -283,7 +284,7 @@
         console.log("AI Ready");
       } catch(e) {
         console.log("AI Failed", e);
-        // Don't auto-skip. We'll let scan attempt show SKIP button if it fails later.
+        // Do NOT auto-skip. We'll show SKIP button if it fails on run.
       }
     };
 
@@ -317,14 +318,17 @@
       currentRotation = 0;
       aiResult = "SKIPPED";
 
-      // longer failsafe: some phones take longer to load models
+      // Longer failsafe for slow phones
       clearTimeout(scanTimer);
       scanTimer = setTimeout(() => {
         document.getElementById("manual-options").style.display = "block";
         document.getElementById("loading-msg").innerText = "TAKING TOO LONG — TAP SKIP";
       }, 6000);
 
-      const url = URL.createObjectURL(file);
+      // cleanup last object url
+      try { if (lastObjectUrl) URL.revokeObjectURL(lastObjectUrl); } catch (_) {}
+      lastObjectUrl = URL.createObjectURL(file);
+
       img.onload = () => {
         const aiCan = document.createElement("canvas");
         const scale = Math.min(1, 400 / img.width);
@@ -333,7 +337,7 @@
         aiCan.getContext("2d").drawImage(img, 0, 0, aiCan.width, aiCan.height);
         runAI(aiCan);
       };
-      img.src = url;
+      img.src = lastObjectUrl;
     }
 
     async function runAI(canvasRef) {
@@ -348,20 +352,19 @@
           return;
         }
 
-        // no face detected
+        // No face detected -> require explicit choice
         aiResult = "NOT_DETECTED";
         clearTimeout(scanTimer);
         document.getElementById("manual-options").style.display = "block";
         document.getElementById("loading-msg").innerText = "NO FACE DETECTED";
 
-        // require explicit user choice
         if (confirm("No face detected. Continue anyway?")) {
           forceEditor();
         } else {
           location.reload();
         }
       } catch(e) {
-        // ✅ CRITICAL FIX: do NOT auto-skip on AI failure
+        // ✅ CRITICAL: do NOT auto-skip on AI failure
         aiResult = "AI_FAILED";
         clearTimeout(scanTimer);
         document.getElementById("manual-options").style.display = "block";
@@ -538,6 +541,9 @@
       btn.classList.add("active");
     }
 
+    // =========================
+    // ✅ Upload: compress so Discord accepts it
+    // =========================
     function finishVerification() {
       if (!VERIFY_TOKEN) {
         alert("Invalid link. Please re-run /verify in Discord.");
@@ -545,14 +551,16 @@
       }
 
       const btn = document.getElementById("submitBtn");
-      btn.innerHTML = "ENCRYPTING...";
+      btn.innerHTML = "UPLOADING...";
       btn.disabled = true;
 
+      // 1) render full-res final image
       const outCan = document.createElement("canvas");
       outCan.width = img.width;
       outCan.height = img.height;
       const ctx = outCan.getContext("2d");
 
+      // rotated image
       ctx.save();
       ctx.translate(img.width/2, img.height/2);
       ctx.rotate(currentRotation * Math.PI / 180);
@@ -560,6 +568,7 @@
       ctx.drawImage(img, 0, 0);
       ctx.restore();
 
+      // strokes in rotated space
       ctx.save();
       ctx.translate(img.width/2, img.height/2);
       ctx.rotate(currentRotation * Math.PI / 180);
@@ -576,37 +585,43 @@
         for (let i=1; i<s.points.length; i++) ctx.lineTo(s.points[i].x, s.points[i].y);
         ctx.stroke();
       });
-
       ctx.restore();
 
-      outCan.toBlob(blob => {
-        if (!blob) {
-          alert("Could not create image blob. Try a different photo.");
+      // 2) downscale + jpeg compress
+      const MAX_DIM = 1600; // safe across phones + discord
+      const scale = Math.min(1, MAX_DIM / Math.max(outCan.width, outCan.height));
+
+      const sendCan = document.createElement("canvas");
+      sendCan.width = Math.max(1, Math.floor(outCan.width * scale));
+      sendCan.height = Math.max(1, Math.floor(outCan.height * scale));
+
+      const sctx = sendCan.getContext("2d");
+      sctx.drawImage(outCan, 0, 0, sendCan.width, sendCan.height);
+
+      sendCan.toBlob(async (blob) => {
+        try {
+          if (!blob) throw new Error("Could not encode image blob.");
+
+          const form = new FormData();
+          // IMPORTANT: jpeg keeps size low
+          form.append("file", blob, "stoney_verify.jpg");
+          form.append("token", VERIFY_TOKEN);
+          form.append("status", aiResult);
+
+          const res = await fetch("/api/verify", { method: "POST", body: form });
+          const data = await res.json().catch(() => ({}));
+
+          if (res.ok && data.success) {
+            goToScreen("screen-success");
+          } else {
+            throw new Error(data.error || "Server rejected upload");
+          }
+        } catch (err) {
+          alert("Upload Error: " + err.message);
           btn.disabled = false;
           btn.innerHTML = "UPLOAD SECURELY";
-          return;
         }
-
-        const form = new FormData();
-        form.append("file", blob, "stoney_verify.png");
-        form.append("token", VERIFY_TOKEN);
-        form.append("status", aiResult);
-
-        fetch("/api/verify", { method: "POST", body: form })
-          .then(async res => {
-            const data = await res.json().catch(() => ({}));
-            if (res.ok && data.success) {
-              goToScreen("screen-success");
-            } else {
-              throw new Error(data.error || "Server rejected upload");
-            }
-          })
-          .catch(err => {
-            alert("Upload Error: " + err.message);
-            btn.disabled = false;
-            btn.innerHTML = "UPLOAD SECURELY";
-          });
-      }, "image/png");
+      }, "image/jpeg", 0.85);
     }
   </script>
 </body>

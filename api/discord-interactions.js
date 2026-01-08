@@ -1,217 +1,221 @@
-// api/verify.js
-const { createClient } = require("@supabase/supabase-js");
-const { IncomingForm } = require("formidable");
-const fs = require("fs");
+// api/interactions.js
+const crypto = require("crypto");
 const https = require("https");
-const FormData = require("form-data");
+const { createClient } = require("@supabase/supabase-js");
 
-// ---- CORS ----
-function setCors(req, res) {
-  res.setHeader("Access-Control-Allow-Origin", "*");
-  res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
-}
-
-function readStreamBody(stream) {
-  return new Promise((resolve) => {
-    let data = "";
-    stream.on("data", (c) => (data += c));
-    stream.on("end", () => resolve(data));
-    stream.on("error", () => resolve(data));
-  });
-}
-
-async function getWebhookInfo(webhookUrl) {
-  // GET https://discord.com/api/webhooks/{id}/{token}
+function readRawBody(req) {
   return new Promise((resolve, reject) => {
-    https
-      .get(webhookUrl, async (resp) => {
-        const body = await readStreamBody(resp);
-        if ((resp.statusCode || 0) < 200 || (resp.statusCode || 0) >= 300) {
-          return reject(new Error(`Webhook GET failed ${resp.statusCode}: ${body}`));
-        }
-        try {
-          resolve(JSON.parse(body));
-        } catch {
-          reject(new Error("Webhook GET returned non-JSON"));
-        }
-      })
-      .on("error", reject);
+    const chunks = [];
+    req.on("data", (c) => chunks.push(c));
+    req.on("end", () => resolve(Buffer.concat(chunks)));
+    req.on("error", reject);
   });
 }
 
-function formGetLength(fd) {
-  return new Promise((resolve, reject) => {
-    fd.getLength((err, length) => (err ? reject(err) : resolve(length)));
-  });
+// Discord public key (hex 32 bytes) -> SPKI DER for ed25519
+function discordPublicKeyToKeyObject(hexKey) {
+  const raw = Buffer.from(hexKey, "hex");
+  if (raw.length !== 32) throw new Error("DISCORD_PUBLIC_KEY must be 32-byte hex");
+  const prefix = Buffer.from("302a300506032b6570032100", "hex"); // ASN.1 header for ed25519
+  const spki = Buffer.concat([prefix, raw]);
+  return crypto.createPublicKey({ key: spki, format: "der", type: "spki" });
 }
 
-async function postDiscordChannelMessage(channelId, botToken, formData) {
-  const length = await formGetLength(formData);
+function verifyDiscordSignature({ publicKeyHex, signatureHex, timestamp, rawBody }) {
+  const keyObj = discordPublicKeyToKeyObject(publicKeyHex);
+  const sig = Buffer.from(signatureHex, "hex");
+  const msg = Buffer.concat([Buffer.from(timestamp, "utf8"), rawBody]);
+  return crypto.verify(null, msg, keyObj, sig);
+}
 
-  const options = {
-    method: "POST",
+function discordReq(method, path, botToken) {
+  const opts = {
+    method,
     hostname: "discord.com",
-    path: `/api/v10/channels/${channelId}/messages`,
+    path: `/api/v10${path}`,
     headers: {
       Authorization: `Bot ${botToken}`,
-      ...formData.getHeaders(),
-      "Content-Length": length,
+      "Content-Type": "application/json",
+      "Content-Length": 0,
     },
-    timeout: 20000,
+    timeout: 15000,
   };
 
   return new Promise((resolve, reject) => {
-    const req = https.request(options, async (resp) => {
-      const body = await readStreamBody(resp);
-      resolve({ status: resp.statusCode || 0, body });
+    const req = https.request(opts, (resp) => {
+      const chunks = [];
+      resp.on("data", (c) => chunks.push(c));
+      resp.on("end", () => {
+        resolve({
+          status: resp.statusCode || 0,
+          body: Buffer.concat(chunks).toString("utf8"),
+        });
+      });
     });
-    req.on("timeout", () => req.destroy(new Error("Discord request timeout")));
+    req.on("timeout", () => req.destroy(new Error("Discord API timeout")));
     req.on("error", reject);
-    formData.pipe(req);
+    req.end();
   });
 }
 
 module.exports = async function handler(req, res) {
-  setCors(req, res);
+  if (req.method !== "POST") return res.status(405).send("Method not allowed");
 
-  if (req.method === "OPTIONS") return res.status(204).end();
-  if (req.method !== "POST") return res.status(405).json({ success: false, error: "Method not allowed" });
+  const publicKey = process.env.DISCORD_PUBLIC_KEY;
+  const botToken = process.env.DISCORD_BOT_TOKEN;
 
   const supabaseUrl = process.env.SUPABASE_URL;
   const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  const botToken = process.env.DISCORD_BOT_TOKEN;
 
-  if (!supabaseUrl || !serviceRoleKey) {
-    return res.status(500).json({ success: false, error: "Missing SUPABASE env vars" });
+  const verifiedRoleId = process.env.DISCORD_VERIFIED_ROLE_ID;
+  const residentRoleId = process.env.DISCORD_RESIDENT_ROLE_ID;
+
+  const staffRoleIds = (process.env.DISCORD_STAFF_ROLE_IDS || "")
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
+
+  if (!publicKey) return res.status(500).send("Missing DISCORD_PUBLIC_KEY");
+  if (!botToken) return res.status(500).send("Missing DISCORD_BOT_TOKEN");
+  if (!supabaseUrl || !serviceRoleKey) return res.status(500).send("Missing Supabase env vars");
+  if (!verifiedRoleId || !residentRoleId) return res.status(500).send("Missing role env vars");
+  if (!staffRoleIds.length) return res.status(500).send("Missing DISCORD_STAFF_ROLE_IDS");
+
+  const sig = req.headers["x-signature-ed25519"];
+  const ts = req.headers["x-signature-timestamp"];
+  if (!sig || !ts) return res.status(401).send("Missing signature headers");
+
+  const rawBody = await readRawBody(req);
+
+  const ok = verifyDiscordSignature({
+    publicKeyHex: publicKey,
+    signatureHex: sig,
+    timestamp: ts,
+    rawBody,
+  });
+  if (!ok) return res.status(401).send("Bad signature");
+
+  const interaction = JSON.parse(rawBody.toString("utf8"));
+
+  // PING from Discord to validate endpoint
+  if (interaction.type === 1) {
+    return res.status(200).json({ type: 1 });
   }
-  if (!botToken) {
-    // Buttons require bot-posting. Without bot token you can still upload,
-    // but you WON’T get working approve/deny interactions.
-    return res.status(500).json({ success: false, error: "Missing DISCORD_BOT_TOKEN env var" });
+
+  // Only handle button interactions
+  if (interaction.type !== 3) {
+    return res.status(200).json({ type: 4, data: { content: "Unhandled interaction type.", flags: 64 } });
+  }
+
+  const customId = interaction.data?.custom_id || "";
+  const parts = customId.split(":"); // verify:approve:TOKEN
+  if (parts.length !== 3 || parts[0] !== "verify") {
+    return res.status(200).json({ type: 4, data: { content: "Invalid button.", flags: 64 } });
+  }
+
+  const action = parts[1]; // approve | deny
+  const token = parts[2];
+
+  // Staff gate
+  const clickerRoles = interaction.member?.roles || [];
+  const isStaff = clickerRoles.some((r) => staffRoleIds.includes(r));
+  if (!isStaff) {
+    return res.status(200).json({ type: 4, data: { content: "❌ You are not allowed to do that.", flags: 64 } });
   }
 
   const supabase = createClient(supabaseUrl, serviceRoleKey, { auth: { persistSession: false } });
 
-  // ✅ Formidable v3 correct usage
-  const form = new IncomingForm({
-    multiples: false,
-    keepExtensions: true,
-    maxFileSize: 4 * 1024 * 1024, // 4MB
-  });
+  const { data: row, error: readErr } = await supabase
+    .from("verification_tokens")
+    .select("token, user_id, used")
+    .eq("token", token)
+    .single();
 
-  form.parse(req, async (err, fields, files) => {
-    let tempPath = null;
+  if (readErr || !row) {
+    return res.status(200).json({ type: 4, data: { content: "Token not found.", flags: 64 } });
+  }
+  if (row.used) {
+    return res.status(200).json({ type: 4, data: { content: "Already decided.", flags: 64 } });
+  }
 
-    try {
-      if (err) {
-        return res.status(400).json({
-          success: false,
-          error: "Bad upload payload (maybe too large)",
-          details: String(err?.message || err),
-        });
-      }
+  const guildId = interaction.guild_id;
+  const userId = row.user_id;
 
-      const token = Array.isArray(fields.token) ? fields.token[0] : fields.token;
-      const status = Array.isArray(fields.status) ? fields.status[0] : fields.status;
+  try {
+    if (action === "approve") {
+      // ✅ grant roles
+      const [r1, r2] = await Promise.all([
+        discordReq("PUT", `/guilds/${guildId}/members/${userId}/roles/${verifiedRoleId}`, botToken),
+        discordReq("PUT", `/guilds/${guildId}/members/${userId}/roles/${residentRoleId}`, botToken),
+      ]);
 
-      const uploaded = Array.isArray(files.file) ? files.file[0] : files.file;
-      const filepath = uploaded?.filepath || uploaded?.path; // (path fallback)
+      if (r1.status < 200 || r1.status >= 300) throw new Error(`Role add failed (verified): ${r1.body}`);
+      if (r2.status < 200 || r2.status >= 300) throw new Error(`Role add failed (resident): ${r2.body}`);
 
-      if (!token) return res.status(400).json({ success: false, error: "Missing token" });
-      if (!filepath) return res.status(400).json({ success: false, error: "Missing file" });
-
-      tempPath = filepath;
-
-      // Lookup token row
-      const { data: row, error: readErr } = await supabase
+      await supabase
         .from("verification_tokens")
-        .select("webhook_url, expires_at, used, user_id")
-        .eq("token", token)
-        .single();
+        .update({
+          used: true,
+          decision: "approved",
+          decided_at: new Date().toISOString(),
+          decided_by: interaction.member?.user?.id || null,
+        })
+        .eq("token", token);
 
-      if (readErr || !row) return res.status(400).json({ success: false, error: "Invalid token" });
-      if (!row.webhook_url) return res.status(400).json({ success: false, error: "Token missing webhook_url" });
-      if (!row.user_id) return res.status(400).json({ success: false, error: "Token missing user_id" });
-      if (row.used) return res.status(400).json({ success: false, error: "Token already decided" });
-
-      if (row.expires_at) {
-        const expMs = new Date(row.expires_at).getTime();
-        if (Number.isFinite(expMs) && Date.now() > expMs) {
-          return res.status(400).json({ success: false, error: "Token expired" });
-        }
-      }
-
-      // Discover channel_id from webhook (no auth required)
-      const webhookInfo = await getWebhookInfo(row.webhook_url);
-      const channelId = webhookInfo.channel_id;
-      if (!channelId) return res.status(500).json({ success: false, error: "Could not resolve channel_id from webhook" });
-
-      const mime = uploaded.mimetype || "image/jpeg";
-      const filename = "stoney_verify.jpg";
-
-      // Build multipart for Discord channel message (as bot)
-      const fd = new FormData();
-
-      fd.append(
-        "payload_json",
-        JSON.stringify({
-          content: `🌿 **Verification Submission Received**\nUser: <@${row.user_id}>`,
-          attachments: [{ id: 0, filename, description: "User upload" }],
-          embeds: [
-            {
-              title: "Stoney Verify Submission",
-              description: `**AI Status:** ${status || "UNKNOWN"}\n**Token:** \`${token}\``,
-              image: { url: `attachment://${filename}` },
-              timestamp: new Date().toISOString(),
-            },
-          ],
+      return res.status(200).json({
+        type: 7,
+        data: {
+          content: `✅ **APPROVED** by <@${interaction.member.user.id}> — roles granted to <@${userId}>`,
+          embeds: interaction.message?.embeds || [],
           components: [
             {
               type: 1,
               components: [
-                { type: 2, style: 3, label: "APPROVE", custom_id: `verify:approve:${token}` },
-                { type: 2, style: 4, label: "DENY", custom_id: `verify:deny:${token}` },
+                { type: 2, style: 3, label: "APPROVED", custom_id: "noop_a", disabled: true },
+                { type: 2, style: 4, label: "DENY", custom_id: "noop_d", disabled: true },
               ],
             },
           ],
-        })
-      );
-
-      // Use stream (less memory)
-      fd.append("files[0]", fs.createReadStream(tempPath), { filename, contentType: mime });
-
-      const discordRes = await postDiscordChannelMessage(channelId, botToken, fd);
-
-      if (discordRes.status < 200 || discordRes.status >= 300) {
-        return res.status(502).json({
-          success: false,
-          error: "Discord rejected message",
-          status: discordRes.status,
-          details: String(discordRes.body || "").slice(0, 1200),
-        });
-      }
-
-      // Optional logging (don’t hard-fail if columns differ)
-      try {
-        await supabase
-          .from("verification_tokens")
-          .update({
-            submitted: true,
-            submitted_at: new Date().toISOString(),
-            ai_status: status || null,
-          })
-          .eq("token", token);
-      } catch (_) {}
-
-      return res.status(200).json({ success: true });
-    } catch (e) {
-      console.error("verify api error:", e);
-      return res.status(500).json({ success: false, error: "Internal server error", details: String(e?.message || e) });
-    } finally {
-      if (tempPath) fs.unlink(tempPath, () => {});
+        },
+      });
     }
-  });
+
+    if (action === "deny") {
+      await supabase
+        .from("verification_tokens")
+        .update({
+          used: true,
+          decision: "denied",
+          decided_at: new Date().toISOString(),
+          decided_by: interaction.member?.user?.id || null,
+        })
+        .eq("token", token);
+
+      return res.status(200).json({
+        type: 7,
+        data: {
+          content: `❌ **DENIED** by <@${interaction.member.user.id}> — user: <@${userId}>`,
+          embeds: interaction.message?.embeds || [],
+          components: [
+            {
+              type: 1,
+              components: [
+                { type: 2, style: 3, label: "APPROVE", custom_id: "noop_a", disabled: true },
+                { type: 2, style: 4, label: "DENIED", custom_id: "noop_d", disabled: true },
+              ],
+            },
+          ],
+        },
+      });
+    }
+
+    return res.status(200).json({ type: 4, data: { content: "Unknown action.", flags: 64 } });
+  } catch (e) {
+    return res.status(200).json({
+      type: 4,
+      data: { content: `❌ Error: ${String(e.message || e).slice(0, 1800)}`, flags: 64 },
+    });
+  }
 };
 
 module.exports.config = { api: { bodyParser: false } };

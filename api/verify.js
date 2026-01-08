@@ -1,7 +1,8 @@
 // /api/verify.js
+
 const { createClient } = require("@supabase/supabase-js");
 
-// ✅ Hardened formidable import for v3 differences
+// Hardened formidable import for v3 differences
 const formidablePkg = require("formidable");
 const makeFormidable =
   typeof formidablePkg === "function"
@@ -78,7 +79,7 @@ module.exports = async function handler(req, res) {
       success: false,
       error: "Formidable import failed",
       details:
-        "Expected require('formidable') to be a function or have a .formidable function. Check formidable version.",
+        "Expected require('formidable') to be a function or have a .formidable function.",
     });
   }
 
@@ -115,9 +116,7 @@ module.exports = async function handler(req, res) {
 
       const token = String(pickFirst(fields.token) || "").trim();
       const status = String(pickFirst(fields.status) || "").trim() || "UNKNOWN";
-
-      // ✅ handle files.file OR files["file"]
-      const uploaded = pickFirst(files?.file || files?.["file"]);
+      const uploaded = pickFirst(files.file);
 
       if (!token) {
         return res.status(400).json({ success: false, error: "Missing token" });
@@ -148,7 +147,7 @@ module.exports = async function handler(req, res) {
       if (!row.webhook_url) {
         return res.status(500).json({
           success: false,
-          error: "Token row missing webhook_url (Supabase row is incomplete)",
+          error: "Token row missing webhook_url",
         });
       }
 
@@ -158,32 +157,30 @@ module.exports = async function handler(req, res) {
       const filename = "stoney_verify.jpg";
       const mime = uploaded?.mimetype || "image/jpeg";
 
-      // ✅ Token appears ONCE (embed footer) so the bot can parse it
-      const footerToken = `token: ${token}`;
-
+      // ✅ CLEAN PAYLOAD: no repeated token spam, no embed fields
+      // Keep token ONLY in footer (short form) so staff can reference it if needed.
       const payload = {
         username: "StoneyVerify",
-        // ✅ keep content clean (no token spam)
         content:
           "🌿 **Verification Submission Received**\n" +
           (row.user_id ? `User: <@${row.user_id}>\n` : "") +
           `AI: ${status}\n` +
-          "Staff: check the image, then use the Approve/Reject panel.",
+          "Staff: use the Approve/Reject panel below.",
         embeds: [
           {
             title: "Stoney Verify Submission",
             description: `AI Status: ${status}`,
             image: { url: `attachment://${filename}` },
-            footer: { text: footerToken }, // ✅ single token location
+            footer: { text: `t:${token}` }, // ✅ short + consistent
             timestamp: new Date().toISOString(),
           },
         ],
+        attachments: [{ id: 0, filename }],
       };
 
       fd.append("payload_json", JSON.stringify(payload));
       fd.append("files[0]", buf, { filename, contentType: mime });
 
-      // ✅ safe add ?wait=true
       const whUrl = new URL(row.webhook_url);
       whUrl.searchParams.set("wait", "true");
 
@@ -198,7 +195,7 @@ module.exports = async function handler(req, res) {
         });
       }
 
-      // Optional update (warn + continue if cols missing)
+      // ✅ Mark submitted (warn-only if your table lacks cols)
       const upd = await supabase
         .from("verification_tokens")
         .update({
@@ -220,11 +217,7 @@ module.exports = async function handler(req, res) {
         error: String(e?.message || e),
       });
     } finally {
-      if (tempPath) {
-        try {
-          fs.unlink(tempPath, () => {});
-        } catch (_) {}
-      }
+      if (tempPath) fs.unlink(tempPath, () => {});
     }
   });
 };

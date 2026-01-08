@@ -114,7 +114,9 @@ module.exports = async function handler(req, res) {
 
       const token = String(pickFirst(fields.token) || "").trim();
       const status = String(pickFirst(fields.status) || "").trim() || "UNKNOWN";
-      const uploaded = pickFirst(files.file);
+
+      // ✅ handle files.file OR files["file"]
+      const uploaded = pickFirst(files?.file || files?.["file"]);
 
       if (!token) {
         return res.status(400).json({ success: false, error: "Missing token" });
@@ -156,24 +158,32 @@ module.exports = async function handler(req, res) {
       const filename = "stoney_verify.jpg";
       const mime = uploaded?.mimetype || "image/jpeg";
 
+      // ✅ Put token in MULTIPLE places to guarantee bot extraction
+      const tokenLine = `token: ${token}`;
+
       const payload = {
         username: "StoneyVerify",
         content:
           "🌿 **Verification Submission Received**\n" +
           (row.user_id ? `User: <@${row.user_id}>\n` : "") +
           `AI: ${status}\n` +
-          `token: ${token}\n` +
+          `${tokenLine}\n` +
           "Staff: check the image, then use the Approve/Reject panel.",
         embeds: [
           {
             title: "Stoney Verify Submission",
-            description: `AI Status: ${status}\nToken: ${token}`,
+            description: `AI Status: ${status}\n${tokenLine}`,
+            fields: [
+              { name: "Token", value: tokenLine, inline: false },
+              row.user_id
+                ? { name: "User", value: `<@${row.user_id}>`, inline: false }
+                : null,
+            ].filter(Boolean),
             image: { url: `attachment://${filename}` },
-            footer: { text: `token: ${token}` },
+            footer: { text: tokenLine },
             timestamp: new Date().toISOString(),
           },
         ],
-        attachments: [{ id: 0, filename }],
       };
 
       fd.append("payload_json", JSON.stringify(payload));
@@ -194,7 +204,7 @@ module.exports = async function handler(req, res) {
         });
       }
 
-      // Optional: this is okay to "warn and continue" if columns don't exist
+      // Optional update (warn + continue if columns don't exist)
       const upd = await supabase
         .from("verification_tokens")
         .update({
@@ -217,7 +227,9 @@ module.exports = async function handler(req, res) {
       });
     } finally {
       if (tempPath) {
-        fs.unlink(tempPath, () => {});
+        try {
+          fs.unlink(tempPath, () => {});
+        } catch (_) {}
       }
     }
   });

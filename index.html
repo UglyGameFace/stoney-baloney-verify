@@ -3,6 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <meta name="theme-color" content="#050505" />
   <title>Stoney Baloney Verify</title>
 
   <link href="https://fonts.googleapis.com/css2?family=Rubik+Glitch&family=Fredoka:wght@400;600&family=Share+Tech+Mono&display=swap" rel="stylesheet">
@@ -36,6 +37,7 @@
     .header { text-align: center; margin-bottom: 10px; margin-top: 10px; }
     .logo-icon { font-size: 50px; color: var(--neon-green); filter: drop-shadow(0 0 15px var(--neon-green)); animation: float 3s ease-in-out infinite; }
     .brand-name { font-family: 'Rubik Glitch', cursive; font-size: 32px; color: #fff; text-shadow: 2px 2px 0px var(--neon-purple); margin-top: 5px; line-height: 1; }
+    .chill-text { font-family:'Share Tech Mono'; color:#777; margin-top:6px; font-size:12px; }
 
     .btn {
       background: linear-gradient(45deg, var(--neon-green), #006400); color: #000; width: 100%;
@@ -71,6 +73,7 @@
       background: rgba(20, 20, 20, 0.9); border: 1px solid #444; color: #fff;
       padding: 10px 5px; border-radius: 6px; font-family: 'Share Tech Mono'; font-size: 10px;
       text-align: center; display: flex; flex-direction: column; align-items: center; gap: 5px; cursor:pointer;
+      user-select:none;
     }
     .tool-btn i { font-size: 16px; color: var(--neon-green); }
     .tool-btn.active { border-color: var(--neon-green); background: rgba(57, 255, 20, 0.15); }
@@ -244,12 +247,9 @@
   </div>
 
   <script>
-    // =========================
-    // TOKEN + STATE
-    // =========================
     let VERIFY_TOKEN = null;
 
-    let img = new Image();
+    const img = new Image();
     let strokes = [];
     let currentStroke = [];
     let view = { x: 0, y: 0, scale: 1 };
@@ -281,8 +281,8 @@
       try {
         faceModel = await blazeface.load();
         console.log("AI Ready");
-      } catch(e) {
-        console.log("AI Failed", e);
+      } catch (e) {
+        console.log("AI Failed to preload:", e);
       }
     };
 
@@ -303,7 +303,6 @@
       if (!input.files || !input.files[0]) return;
 
       const file = input.files[0];
-      // allow re-selecting same file on iOS
       input.value = "";
 
       document.getElementById("loading-overlay").style.display = "flex";
@@ -334,6 +333,13 @@
         aiCan.getContext("2d").drawImage(img, 0, 0, aiCan.width, aiCan.height);
         runAI(aiCan);
       };
+
+      img.onerror = () => {
+        clearTimeout(scanTimer);
+        document.getElementById("loading-msg").innerText = "IMAGE LOAD FAILED";
+        document.getElementById("manual-options").style.display = "block";
+      };
+
       img.src = lastObjectUrl;
     }
 
@@ -359,7 +365,7 @@
         } else {
           location.reload();
         }
-      } catch(e) {
+      } catch (e) {
         aiResult = "AI_FAILED";
         clearTimeout(scanTimer);
         document.getElementById("manual-options").style.display = "block";
@@ -405,8 +411,9 @@
       const canvasEl = document.getElementById("canvas");
 
       function toWorld(tx, ty) {
-        let x = (tx * (window.devicePixelRatio||1) - view.x) / view.scale;
-        let y = (ty * (window.devicePixelRatio||1) - view.y) / view.scale;
+        const dpr = window.devicePixelRatio || 1;
+        let x = (tx * dpr - view.x) / view.scale;
+        let y = (ty * dpr - view.y) / view.scale;
 
         const cx = img.width / 2, cy = img.height / 2;
         const rad = -currentRotation * Math.PI / 180;
@@ -418,7 +425,7 @@
         };
       }
 
-      canvasEl.addEventListener("touchstart", e => {
+      canvasEl.addEventListener("touchstart", (e) => {
         e.preventDefault();
 
         if (e.touches.length === 2) {
@@ -441,9 +448,9 @@
           const pt = toWorld(e.touches[0].clientX - rect.left, e.touches[0].clientY - rect.top);
           currentStroke = [pt];
         }
-      }, { passive:false });
+      }, { passive: false });
 
-      canvasEl.addEventListener("touchmove", e => {
+      canvasEl.addEventListener("touchmove", (e) => {
         e.preventDefault();
 
         if (isPinching && e.touches.length === 2) {
@@ -455,8 +462,9 @@
           const cx = (e.touches[0].clientX + e.touches[1].clientX) / 2;
           const cy = (e.touches[0].clientY + e.touches[1].clientY) / 2;
 
-          view.x += (cx - lastTouch.x) * (window.devicePixelRatio||1);
-          view.y += (cy - lastTouch.y) * (window.devicePixelRatio||1);
+          const dpr = window.devicePixelRatio || 1;
+          view.x += (cx - lastTouch.x) * dpr;
+          view.y += (cy - lastTouch.y) * dpr;
           lastTouch = { x: cx, y: cy };
 
           const delta = dist - lastDist;
@@ -470,11 +478,11 @@
           currentStroke.push(pt);
           render();
         }
-      }, { passive:false });
+      }, { passive: false });
 
-      canvasEl.addEventListener("touchend", e => {
+      canvasEl.addEventListener("touchend", (e) => {
         if (e.touches.length === 0) {
-          if (isDrawing && currentStroke.length > 0) {
+          if (isDrawing && currentStroke.length > 1) {
             strokes.push({ points: currentStroke, size: brushSize });
           }
           isDrawing = false;
@@ -482,7 +490,7 @@
           currentStroke = [];
           render();
         }
-      }, { passive:false });
+      }, { passive: false });
     }
 
     function render() {
@@ -505,21 +513,19 @@
       ctx.lineJoin = "round";
       ctx.strokeStyle = "#000";
 
-      strokes.forEach(strokeData => {
+      function drawStroke(strokeData, width) {
         if (!strokeData.points || strokeData.points.length < 2) return;
-        ctx.lineWidth = strokeData.size;
+        ctx.lineWidth = width;
         ctx.beginPath();
         ctx.moveTo(strokeData.points[0].x, strokeData.points[0].y);
         for (let i=1; i<strokeData.points.length; i++) ctx.lineTo(strokeData.points[i].x, strokeData.points[i].y);
         ctx.stroke();
-      });
+      }
 
-      if (currentStroke.length > 0) {
-        ctx.lineWidth = brushSize;
-        ctx.beginPath();
-        ctx.moveTo(currentStroke[0].x, currentStroke[0].y);
-        for (let i=1; i<currentStroke.length; i++) ctx.lineTo(currentStroke[i].x, currentStroke[i].y);
-        ctx.stroke();
+      strokes.forEach(s => drawStroke(s, s.size));
+
+      if (currentStroke.length > 1) {
+        drawStroke({ points: currentStroke }, brushSize);
       }
 
       ctx.restore();
@@ -535,38 +541,18 @@
       btn.classList.add("active");
     }
 
-    function canvasToBlob(canvas, type, quality) {
-      return new Promise((resolve, reject) => {
-        if (canvas.toBlob) {
-          canvas.toBlob(b => (b ? resolve(b) : reject(new Error("toBlob failed"))), type, quality);
-          return;
-        }
-        // fallback
-        try {
-          const dataUrl = canvas.toDataURL(type, quality);
-          const parts = dataUrl.split(",");
-          const mime = parts[0].match(/:(.*?);/)[1];
-          const bin = atob(parts[1]);
-          const len = bin.length;
-          const arr = new Uint8Array(len);
-          for (let i = 0; i < len; i++) arr[i] = bin.charCodeAt(i);
-          resolve(new Blob([arr], { type: mime }));
-        } catch (e) {
-          reject(e);
-        }
+    async function canvasToBlob(canvas, mime, quality) {
+      return await new Promise((resolve) => {
+        canvas.toBlob((b) => resolve(b), mime, quality);
       });
     }
 
-    // =========================
-    // Upload
-    // =========================
     async function finishVerification() {
       if (!VERIFY_TOKEN) {
         alert("Invalid link. Please re-run /verify in Discord.");
         return;
       }
 
-      // capture last stroke if user uploads mid-draw
       if (isDrawing && currentStroke && currentStroke.length > 1) {
         strokes.push({ points: currentStroke, size: brushSize });
         currentStroke = [];
@@ -612,11 +598,19 @@
         ctx.restore();
 
         const MIME = "image/jpeg";
-        const QUALITY = 0.85;
+        let QUALITY = 0.85;
 
-        const blob = await canvasToBlob(outCan, MIME, QUALITY);
+        let blob = await canvasToBlob(outCan, MIME, QUALITY);
+        if (!blob) throw new Error("Could not create image blob.");
 
-        if (blob.size > 3.5 * 1024 * 1024) {
+        while (blob.size > 3.8 * 1024 * 1024 && QUALITY > 0.55) {
+          QUALITY -= 0.08;
+          blob = await canvasToBlob(outCan, MIME, QUALITY);
+          if (!blob) break;
+        }
+
+        if (!blob) throw new Error("Could not create image blob.");
+        if (blob.size > 3.9 * 1024 * 1024) {
           throw new Error("Image still too large. Try again with a smaller photo.");
         }
 
@@ -628,16 +622,24 @@
         const res = await fetch("/api/verify", { method: "POST", body: form });
 
         const raw = await res.text();
-        let data = {};
+        let data = null;
         try { data = JSON.parse(raw); } catch (_) {}
 
-        if (res.ok && data.success) {
-          goToScreen("screen-success");
-        } else {
-          throw new Error(data.error || raw || "Server rejected upload");
+        if (!res.ok) {
+          const msg = (data && (data.error || data.details))
+            ? `${data.error || "Error"}\n${data.details || ""}`
+            : raw;
+          throw new Error(msg || `HTTP ${res.status}`);
         }
+
+        if (data && data.success) {
+          goToScreen("screen-success");
+          return;
+        }
+
+        throw new Error((data && data.error) || raw || "Server rejected upload");
       } catch (err) {
-        alert("Upload Error: " + err.message);
+        alert("Upload Error: " + (err?.message || String(err)));
         btn.disabled = false;
         btn.innerHTML = "UPLOAD SECURELY";
       }

@@ -1,3 +1,4 @@
+// /api/verify.js
 const { createClient } = require("@supabase/supabase-js");
 
 // ✅ Hardened formidable import for v3 differences
@@ -122,7 +123,6 @@ module.exports = async function handler(req, res) {
         return res.status(400).json({ success: false, error: "Missing token" });
       }
 
-      // formidable v3 -> filepath, older -> path
       tempPath = uploaded?.filepath || uploaded?.path || null;
       if (!tempPath) {
         return res.status(400).json({ success: false, error: "Missing file" });
@@ -158,29 +158,23 @@ module.exports = async function handler(req, res) {
       const filename = "stoney_verify.jpg";
       const mime = uploaded?.mimetype || "image/jpeg";
 
-      // ✅ Put token in MULTIPLE places to guarantee bot extraction
-      const tokenLine = `token: ${token}`;
+      // ✅ Token appears ONCE (embed footer) so the bot can parse it
+      const footerToken = `token: ${token}`;
 
       const payload = {
         username: "StoneyVerify",
+        // ✅ keep content clean (no token spam)
         content:
           "🌿 **Verification Submission Received**\n" +
           (row.user_id ? `User: <@${row.user_id}>\n` : "") +
           `AI: ${status}\n` +
-          `${tokenLine}\n` +
           "Staff: check the image, then use the Approve/Reject panel.",
         embeds: [
           {
             title: "Stoney Verify Submission",
-            description: `AI Status: ${status}\n${tokenLine}`,
-            fields: [
-              { name: "Token", value: tokenLine, inline: false },
-              row.user_id
-                ? { name: "User", value: `<@${row.user_id}>`, inline: false }
-                : null,
-            ].filter(Boolean),
+            description: `AI Status: ${status}`,
             image: { url: `attachment://${filename}` },
-            footer: { text: tokenLine },
+            footer: { text: footerToken }, // ✅ single token location
             timestamp: new Date().toISOString(),
           },
         ],
@@ -189,7 +183,7 @@ module.exports = async function handler(req, res) {
       fd.append("payload_json", JSON.stringify(payload));
       fd.append("files[0]", buf, { filename, contentType: mime });
 
-      // ✅ safe add ?wait=true without breaking existing query params
+      // ✅ safe add ?wait=true
       const whUrl = new URL(row.webhook_url);
       whUrl.searchParams.set("wait", "true");
 
@@ -204,7 +198,7 @@ module.exports = async function handler(req, res) {
         });
       }
 
-      // Optional update (warn + continue if columns don't exist)
+      // Optional update (warn + continue if cols missing)
       const upd = await supabase
         .from("verification_tokens")
         .update({

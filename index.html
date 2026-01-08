@@ -13,178 +13,514 @@
   <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/blazeface"></script>
 
   <style>
-    :root {
-      --neon-green: #39ff14;
-      --neon-red: #ff3333;
-      --neon-orange: #ffaa00;
-      --neon-purple: #bc13fe;
-      --deep-space: #050505;
-      --grid-color: rgba(57, 255, 20, 0.15);
+    :root{
+      --neon-green:#39ff14;
+      --neon-red:#ff3333;
+      --neon-orange:#ffaa00;
+      --neon-purple:#bc13fe;
+      --deep-space:#050505;
+      --grid-color:rgba(57,255,20,0.15);
+
+      --glass: rgba(10,10,10,0.55);
+      --glass2: rgba(15,15,15,0.35);
+      --stroke: rgba(57,255,20,0.35);
+      --stroke2: rgba(188,19,254,0.22);
+      --shadow: 0 18px 45px rgba(0,0,0,0.55);
     }
 
-    * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
-
-    body {
-      background-color: var(--deep-space); color: #fff; font-family: 'Fredoka', sans-serif;
-      min-height: 100dvh; display: flex; flex-direction: column; overflow-x: hidden; position: relative;
-      touch-action: none;
+    *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;}
+    html,body{height:100%;}
+    body{
+      background-color:var(--deep-space);
+      color:#fff;
+      font-family:'Fredoka',sans-serif;
+      min-height:100dvh;
+      display:flex;
+      flex-direction:column;
+      overflow-x:hidden;
+      position:relative;
+      touch-action:none;
     }
 
-    .trippy-bg { position: fixed; top: 0; left: 0; width: 200%; height: 200%; background: radial-gradient(circle, #1a0b2e 10%, #000000 90%); z-index: -3; animation: breathe 10s infinite alternate; }
-    .grid-bg { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-image: linear-gradient(var(--grid-color) 1px, transparent 1px), linear-gradient(90deg, var(--grid-color) 1px, transparent 1px); background-size: 40px 40px; perspective: 500px; z-index: -2; opacity: 0.5; mask-image: radial-gradient(circle, black 40%, transparent 80%); }
-    .scanlines { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.25) 50%), linear-gradient(90deg, rgba(255, 0, 0, 0.06), rgba(0, 255, 0, 0.02), rgba(0, 0, 255, 0.06)); background-size: 100% 2px, 3px 100%; pointer-events: none; z-index: 999; }
-
-    .app-container { flex: 1; display: flex; flex-direction: column; width: 100%; max-width: 500px; margin: 0 auto; padding: 15px; z-index: 10; position: relative; }
-    .header { text-align: center; margin-bottom: 10px; margin-top: 10px; }
-    .logo-icon { font-size: 50px; color: var(--neon-green); filter: drop-shadow(0 0 15px var(--neon-green)); animation: float 3s ease-in-out infinite; }
-    .brand-name { font-family: 'Rubik Glitch', cursive; font-size: 32px; color: #fff; text-shadow: 2px 2px 0px var(--neon-purple); margin-top: 5px; line-height: 1; }
-    .chill-text { font-family:'Share Tech Mono'; color:#777; margin-top:6px; font-size:12px; }
-
-    .btn {
-      background: linear-gradient(45deg, var(--neon-green), #006400); color: #000; width: 100%;
-      padding: 16px; border: none; border-radius: 4px; font-size: 20px; font-weight: 800;
-      font-family: 'Rubik Glitch', sans-serif; letter-spacing: 2px; text-transform: uppercase; cursor: pointer;
-      box-shadow: 0 0 15px rgba(57, 255, 20, 0.4); margin-bottom: 10px;
-      clip-path: polygon(10px 0, 100% 0, 100% calc(100% - 10px), calc(100% - 10px) 100%, 0 100%, 0 10px);
+    /* ====== Background layers (stoner + synth) ====== */
+    .trippy-bg{
+      position:fixed; inset:-50%;
+      background:
+        radial-gradient(circle at 20% 20%, rgba(188,19,254,0.25) 0%, rgba(0,0,0,0) 45%),
+        radial-gradient(circle at 70% 30%, rgba(57,255,20,0.16) 0%, rgba(0,0,0,0) 55%),
+        radial-gradient(circle at 30% 80%, rgba(255,170,0,0.12) 0%, rgba(0,0,0,0) 60%),
+        radial-gradient(circle at 80% 85%, rgba(57,255,20,0.10) 0%, rgba(0,0,0,0) 55%),
+        radial-gradient(circle, #12051f 10%, #000000 85%);
+      z-index:-5;
+      animation:breathe 12s infinite alternate;
+      filter:saturate(1.25) contrast(1.05);
     }
-    .btn:active { transform: scale(0.98); background: var(--neon-green); }
-    .btn:disabled { opacity: 0.45; cursor: not-allowed; filter: grayscale(0.3); }
 
-    .screen { display: none; flex-direction: column; flex: 1; height: 100%; }
-    .screen.active { display: flex; animation: fade-in 0.4s ease; }
-    @keyframes fade-in { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
-    @keyframes breathe { 0% { transform: scale(1); } 100% { transform: scale(1.1); } }
-    @keyframes float { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-6px); } }
-
-    .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin: 20px 0; }
-    .option { background: rgba(0,0,0,0.4); border: 2px solid #333; border-radius: 10px; padding: 25px 10px; text-align: center; transition: 0.2s; user-select:none; }
-    .option:active { border-color: var(--neon-green); background: rgba(57, 255, 20, 0.15); box-shadow: 0 0 15px var(--neon-green); }
-    .option i { font-size: 32px; color: #fff; margin-bottom: 10px; }
-    .feature-row { display: flex; align-items: center; margin-bottom: 15px; }
-    .feature-row i { font-size: 20px; color: var(--neon-purple); margin-right: 15px; width: 25px; text-align: center; }
-
-    #editor-wrapper {
-      flex: 1; position: relative; background: #000; border: 2px solid var(--neon-green);
-      border-radius: 10px; overflow: hidden; margin-bottom: 10px; box-shadow: 0 0 20px rgba(57, 255, 20, 0.1);
+    .grid-bg{
+      position:fixed; inset:0;
+      background-image:
+        linear-gradient(var(--grid-color) 1px, transparent 1px),
+        linear-gradient(90deg, var(--grid-color) 1px, transparent 1px);
+      background-size:42px 42px;
+      z-index:-4;
+      opacity:0.4;
+      mask-image: radial-gradient(circle, black 35%, transparent 75%);
+      transform: translateZ(0);
     }
-    canvas { display: block; width: 100%; height: 100%; touch-action: none; }
 
-    .toolbar-main { display: grid; grid-template-columns: repeat(5, 1fr); gap: 5px; margin-bottom: 10px; }
-    .tool-btn {
-      background: rgba(20, 20, 20, 0.9); border: 1px solid #444; color: #fff;
-      padding: 10px 5px; border-radius: 6px; font-family: 'Share Tech Mono'; font-size: 10px;
-      text-align: center; display: flex; flex-direction: column; align-items: center; gap: 5px; cursor:pointer;
+    /* Smoky haze */
+    .smoke{
+      position:fixed; inset:-30%;
+      background:
+        radial-gradient(circle at 20% 60%, rgba(57,255,20,0.12) 0%, rgba(0,0,0,0) 45%),
+        radial-gradient(circle at 60% 30%, rgba(188,19,254,0.10) 0%, rgba(0,0,0,0) 50%),
+        radial-gradient(circle at 80% 70%, rgba(255,170,0,0.06) 0%, rgba(0,0,0,0) 55%),
+        radial-gradient(circle at 40% 40%, rgba(255,255,255,0.04) 0%, rgba(0,0,0,0) 60%);
+      z-index:-3;
+      opacity:0.9;
+      filter: blur(28px);
+      animation: drift 18s ease-in-out infinite alternate;
+      pointer-events:none;
+    }
+
+    /* subtle sparkles */
+    .sparkles{
+      position:fixed; inset:0;
+      background-image:
+        radial-gradient(circle at 15% 25%, rgba(57,255,20,0.35) 0 1px, transparent 2px),
+        radial-gradient(circle at 35% 65%, rgba(188,19,254,0.25) 0 1px, transparent 2px),
+        radial-gradient(circle at 75% 30%, rgba(255,170,0,0.20) 0 1px, transparent 2px),
+        radial-gradient(circle at 55% 80%, rgba(57,255,20,0.25) 0 1px, transparent 2px);
+      opacity:0.35;
+      filter: blur(0.2px);
+      z-index:-2;
+      pointer-events:none;
+      animation: twinkle 8s ease-in-out infinite alternate;
+    }
+
+    .scanlines{
+      position:fixed; inset:0;
+      background:
+        linear-gradient(rgba(18,16,16,0) 50%, rgba(0,0,0,0.22) 50%),
+        linear-gradient(90deg, rgba(255,0,0,0.05), rgba(0,255,0,0.018), rgba(0,0,255,0.05));
+      background-size:100% 2px, 3px 100%;
+      pointer-events:none;
+      z-index:999;
+      opacity:0.85;
+    }
+
+    @keyframes breathe{0%{transform:scale(1)}100%{transform:scale(1.08)}}
+    @keyframes drift{
+      0%{transform:translate(-1%, -1%) scale(1)}
+      50%{transform:translate(1.5%, 1%) scale(1.03)}
+      100%{transform:translate(2.5%, -1.5%) scale(1.06)}
+    }
+    @keyframes twinkle{0%{opacity:0.25}100%{opacity:0.45}}
+    @keyframes float{0%,100%{transform:translateY(0)}50%{transform:translateY(-6px)}}
+    @keyframes fade-in{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
+
+    /* ====== Layout ====== */
+    .app-container{
+      flex:1;
+      display:flex;
+      flex-direction:column;
+      width:100%;
+      max-width:540px;
+      margin:0 auto;
+      padding:16px;
+      z-index:10;
+      position:relative;
+    }
+
+    .header{
+      text-align:center;
+      margin:10px 0 14px 0;
+    }
+
+    .logo-icon{
+      font-size:54px;
+      color:var(--neon-green);
+      filter:drop-shadow(0 0 16px rgba(57,255,20,0.6));
+      animation:float 3s ease-in-out infinite;
+    }
+
+    .brand-name{
+      font-family:'Rubik Glitch', cursive;
+      font-size:34px;
+      color:#fff;
+      text-shadow: 2px 2px 0px rgba(188,19,254,0.8);
+      margin-top:6px;
+      line-height:0.95;
+    }
+
+    .chill-text{
+      font-family:'Share Tech Mono';
+      color:#9a9a9a;
+      margin-top:8px;
+      font-size:12px;
+      letter-spacing:1px;
+      opacity:0.9;
+    }
+
+    .card{
+      background:linear-gradient(180deg, var(--glass), rgba(0,0,0,0.25));
+      border:1px solid rgba(57,255,20,0.22);
+      border-radius:16px;
+      padding:16px;
+      box-shadow: var(--shadow);
+      backdrop-filter: blur(8px);
+    }
+
+    .divider{
+      height:1px;
+      background: linear-gradient(90deg, transparent, rgba(57,255,20,0.25), transparent);
+      margin:14px 0;
+    }
+
+    .feature-row{
+      display:flex;
+      align-items:flex-start;
+      gap:12px;
+      margin:12px 0;
+    }
+    .feature-row i{
+      font-size:18px;
+      color:var(--neon-purple);
+      width:28px;
+      text-align:center;
+      margin-top:2px;
+      filter: drop-shadow(0 0 10px rgba(188,19,254,0.25));
+    }
+    .feature-row h3{
+      font-size:16px;
+      margin-bottom:2px;
+      letter-spacing:0.2px;
+    }
+    .feature-row p{
+      color:#b6b6b6;
+      font-size:12.5px;
+      line-height:1.35;
+    }
+
+    /* ====== Buttons ====== */
+    .btn{
+      background: linear-gradient(45deg, var(--neon-green), #0a6a2b);
+      color:#000;
+      width:100%;
+      padding:16px;
+      border:none;
+      border-radius:14px;
+      font-size:18px;
+      font-weight:900;
+      font-family:'Rubik Glitch', sans-serif;
+      letter-spacing:1.5px;
+      text-transform:uppercase;
+      cursor:pointer;
+      box-shadow: 0 0 18px rgba(57,255,20,0.32);
+      margin-top:12px;
+      transition: transform .08s ease, filter .2s ease, box-shadow .2s ease;
+    }
+    .btn:active{transform:scale(0.985); filter:saturate(1.15);}
+    .btn:disabled{opacity:0.45; cursor:not-allowed; filter:grayscale(0.3); box-shadow:none;}
+
+    .btn-outline{
+      background:transparent;
+      border:1px solid rgba(255,255,255,0.12);
+      color:#ddd;
+      font-family:'Share Tech Mono';
+      letter-spacing:0;
+      text-transform:none;
+      margin-top:10px;
+      box-shadow:none;
+    }
+
+    /* ====== Screens ====== */
+    .screen{display:none; flex-direction:column; flex:1; height:100%;}
+    .screen.active{display:flex; animation:fade-in .4s ease;}
+
+    .grid{
+      display:grid;
+      grid-template-columns:1fr 1fr;
+      gap:14px;
+      margin:16px 0 0 0;
+    }
+    .option{
+      background:linear-gradient(180deg, rgba(255,255,255,0.04), rgba(0,0,0,0.35));
+      border:1px solid rgba(255,255,255,0.10);
+      border-radius:16px;
+      padding:18px 10px;
+      text-align:center;
+      transition:.18s;
       user-select:none;
+      box-shadow: 0 10px 26px rgba(0,0,0,0.35);
+      backdrop-filter: blur(6px);
     }
-    .tool-btn i { font-size: 16px; color: var(--neon-green); }
-    .tool-btn.active { border-color: var(--neon-green); background: rgba(57, 255, 20, 0.15); }
-    .tool-btn:active { background: #444; }
-
-    .zoom-controls { position: absolute; bottom: 15px; right: 15px; display: flex; flex-direction: column; gap: 8px; }
-    .zoom-circle {
-      width: 40px; height: 40px; border-radius: 50%; background: rgba(0,0,0,0.8);
-      border: 2px solid var(--neon-green); color: var(--neon-green); font-size: 18px;
-      display: flex; align-items: center; justify-content: center; cursor:pointer;
+    .option:active{
+      border-color: var(--neon-green);
+      box-shadow: 0 0 18px rgba(57,255,20,0.22);
+      transform: translateY(1px);
+    }
+    .option i{
+      font-size:30px;
+      color:#fff;
+      margin-bottom:10px;
+      filter: drop-shadow(0 0 10px rgba(57,255,20,0.14));
+    }
+    .option div{
+      font-family:'Share Tech Mono';
+      font-size:12px;
+      letter-spacing:1px;
+      color:#d7d7d7;
     }
 
-    #tutorial-overlay {
-      position: absolute; top: 0; left: 0; width: 100%; height: 100%;
-      background: rgba(0,0,0,0.85); z-index: 500; display: none; justify-content: center; align-items: center;
-      flex-direction: column; text-align: center; backdrop-filter: blur(5px);
+    /* ====== Editor ====== */
+    #editor-wrapper{
+      flex:1;
+      position:relative;
+      background: #000;
+      border:1px solid rgba(57,255,20,0.45);
+      border-radius:18px;
+      overflow:hidden;
+      margin-bottom:10px;
+      box-shadow: 0 0 26px rgba(57,255,20,0.12);
     }
-    .tut-card { background: #111; border: 1px solid var(--neon-green); padding: 25px; border-radius: 15px; width: 85%; box-shadow: 0 0 30px rgba(57, 255, 20, 0.2); }
-    .tut-row { display: flex; align-items: center; margin-bottom: 20px; text-align: left; }
-    .tut-icon { font-size: 30px; width: 50px; text-align: center; margin-right: 15px; }
+    canvas{display:block; width:100%; height:100%; touch-action:none;}
 
-    #loading-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.95); z-index: 2000; display: none; justify-content: center; align-items: center; flex-direction: column; }
-    .loading-text { font-family: 'Rubik Glitch'; color: var(--neon-green); font-size: 24px; margin-top: 20px; text-align:center; }
-    .scanner-beam { width: 250px; height: 2px; background: var(--neon-green); animation: scan-beam 1.5s infinite linear; box-shadow: 0 0 10px var(--neon-green); }
-    @keyframes scan-beam { 0% { transform: translateY(-50px); opacity:0; } 50% { opacity:1; } 100% { transform: translateY(50px); opacity:0; } }
+    .toolbar-main{
+      display:grid;
+      grid-template-columns: repeat(5, 1fr);
+      gap:8px;
+      margin:10px 0 0 0;
+    }
+    .tool-btn{
+      background:linear-gradient(180deg, rgba(255,255,255,0.04), rgba(0,0,0,0.35));
+      border:1px solid rgba(255,255,255,0.10);
+      color:#fff;
+      padding:10px 6px;
+      border-radius:14px;
+      font-family:'Share Tech Mono';
+      font-size:10px;
+      text-align:center;
+      display:flex;
+      flex-direction:column;
+      align-items:center;
+      gap:6px;
+      cursor:pointer;
+      user-select:none;
+      backdrop-filter: blur(6px);
+    }
+    .tool-btn i{font-size:16px;color:var(--neon-green);}
+    .tool-btn.active{
+      border-color: rgba(57,255,20,0.55);
+      background: rgba(57,255,20,0.12);
+      box-shadow: 0 0 16px rgba(57,255,20,0.14);
+    }
+    .tool-btn:active{transform:scale(0.98);}
 
-    #manual-options { display: none; width: 80%; text-align: center; margin-top: 20px; }
-    .btn-manual { background: transparent; border: 1px solid var(--neon-orange); color: var(--neon-orange); padding: 10px; width: 100%; margin-top: 10px; font-weight:bold; cursor:pointer;}
+    .zoom-controls{
+      position:absolute;
+      bottom:14px; right:14px;
+      display:flex;
+      flex-direction:column;
+      gap:10px;
+    }
+    .zoom-circle{
+      width:42px; height:42px;
+      border-radius:50%;
+      background: rgba(0,0,0,0.65);
+      border:1px solid rgba(57,255,20,0.55);
+      color: var(--neon-green);
+      font-size:18px;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      cursor:pointer;
+      box-shadow: 0 0 14px rgba(57,255,20,0.12);
+      backdrop-filter: blur(6px);
+    }
+    .zoom-circle:active{transform:scale(0.97);}
 
-    .token-warning {
-      background: rgba(255, 51, 51, 0.1);
-      border: 1px solid rgba(255, 51, 51, 0.4);
-      color: #ffb3b3;
-      padding: 10px;
-      border-radius: 10px;
-      font-family: "Share Tech Mono";
+    /* Tutorial overlay */
+    #tutorial-overlay{
+      position:absolute; inset:0;
+      background: rgba(0,0,0,0.78);
+      z-index:500;
+      display:none;
+      justify-content:center;
+      align-items:center;
+      flex-direction:column;
+      text-align:center;
+      backdrop-filter: blur(8px);
+      padding:18px;
+    }
+    .tut-card{
+      background: linear-gradient(180deg, rgba(12,12,12,0.92), rgba(0,0,0,0.55));
+      border:1px solid rgba(57,255,20,0.28);
+      padding:18px;
+      border-radius:18px;
+      width:100%;
+      max-width:420px;
+      box-shadow: 0 0 34px rgba(57,255,20,0.12);
+    }
+    .tut-row{display:flex;align-items:center;margin:14px 0;text-align:left;}
+    .tut-icon{font-size:28px;width:52px;text-align:center;margin-right:10px;}
+
+    /* Loading overlay */
+    #loading-overlay{
+      position:fixed; inset:0;
+      background: rgba(0,0,0,0.92);
+      z-index:2000;
+      display:none;
+      justify-content:center;
+      align-items:center;
+      flex-direction:column;
+      padding:18px;
+    }
+    .loading-text{
+      font-family:'Rubik Glitch';
+      color:var(--neon-green);
+      font-size:24px;
+      margin-top:18px;
+      text-align:center;
+      text-shadow: 0 0 18px rgba(57,255,20,0.18);
+    }
+    .scanner-beam{
+      width:260px;
+      height:2px;
+      background: var(--neon-green);
+      animation: scan-beam 1.5s infinite linear;
+      box-shadow: 0 0 12px rgba(57,255,20,0.55);
+      margin-top:10px;
+    }
+    @keyframes scan-beam{
+      0%{transform: translateY(-50px); opacity:0;}
+      50%{opacity:1;}
+      100%{transform: translateY(50px); opacity:0;}
+    }
+
+    #manual-options{display:none;width:100%;max-width:420px;text-align:center;margin-top:18px;}
+    .btn-manual{
+      background:transparent;
+      border:1px solid rgba(255,170,0,0.5);
+      color: var(--neon-orange);
+      padding:12px;
+      width:100%;
+      margin-top:10px;
+      font-weight:800;
+      cursor:pointer;
+      border-radius:14px;
+      font-family:'Share Tech Mono';
+      letter-spacing:0.4px;
+      backdrop-filter: blur(6px);
+    }
+
+    .token-warning{
+      background: rgba(255, 51, 51, 0.10);
+      border: 1px solid rgba(255, 51, 51, 0.40);
+      color:#ffb3b3;
+      padding: 10px 12px;
+      border-radius: 14px;
+      font-family:"Share Tech Mono";
       font-size: 12px;
       line-height: 1.4;
-      margin: 10px 0 0 0;
-      display: none;
+      margin: 12px 0 0 0;
+      display:none;
+      box-shadow: 0 10px 24px rgba(0,0,0,0.35);
     }
 
-    /* ✅ NEW: modal */
+    /* Modal */
     #modal-overlay{
-      position: fixed; inset: 0;
-      background: rgba(0,0,0,0.88);
-      z-index: 3000;
-      display: none;
-      align-items: center;
-      justify-content: center;
-      padding: 20px;
-      backdrop-filter: blur(5px);
+      position:fixed; inset:0;
+      background: rgba(0,0,0,0.82);
+      z-index:3000;
+      display:none;
+      align-items:center;
+      justify-content:center;
+      padding:20px;
+      backdrop-filter: blur(8px);
     }
-    .modal {
-      width: 100%;
-      max-width: 520px;
-      background: #0b0b0b;
-      border: 1px solid rgba(57,255,20,0.35);
-      border-radius: 16px;
-      padding: 18px;
-      box-shadow: 0 0 28px rgba(57,255,20,0.14);
+    .modal{
+      width:100%;
+      max-width:520px;
+      background: linear-gradient(180deg, rgba(12,12,12,0.92), rgba(0,0,0,0.55));
+      border: 1px solid rgba(57,255,20,0.30);
+      border-radius: 18px;
+      padding: 16px;
+      box-shadow: 0 0 36px rgba(57,255,20,0.12);
     }
     .modal h3{
-      font-family: 'Rubik Glitch';
-      letter-spacing: 1px;
-      font-size: 22px;
-      margin-bottom: 8px;
-      color: #fff;
+      font-family:'Rubik Glitch';
+      letter-spacing:1px;
+      font-size:22px;
+      margin-bottom:8px;
+      color:#fff;
     }
     .modal p{
-      font-family: 'Share Tech Mono';
-      color: #bdbdbd;
-      font-size: 13px;
-      line-height: 1.45;
+      font-family:'Share Tech Mono';
+      color:#c2c2c2;
+      font-size:13px;
+      line-height:1.45;
+      white-space:pre-line;
     }
     .modal .pill{
       display:inline-block;
       margin-top:10px;
-      font-family: 'Share Tech Mono';
-      font-size: 12px;
-      padding: 6px 10px;
-      border-radius: 999px;
-      border: 1px solid rgba(255,170,0,0.45);
+      font-family:'Share Tech Mono';
+      font-size:12px;
+      padding:6px 10px;
+      border-radius:999px;
+      border:1px solid rgba(255,170,0,0.45);
       color: var(--neon-orange);
       background: rgba(255,170,0,0.08);
     }
     .modal-actions{
-      margin-top: 14px;
+      margin-top:14px;
       display:flex;
-      gap: 10px;
-      flex-wrap: wrap;
+      gap:10px;
+      flex-wrap:wrap;
     }
     .btn-secondary{
-      background: transparent;
-      border: 1px solid rgba(57,255,20,0.35);
+      background:transparent;
+      border:1px solid rgba(57,255,20,0.35);
       color: var(--neon-green);
-      font-family: 'Share Tech Mono';
-      letter-spacing: 0;
-      text-transform: none;
-      clip-path: none;
+      font-family:'Share Tech Mono';
+      letter-spacing:0;
+      text-transform:none;
+      clip-path:none;
+      border-radius:14px;
+      padding:14px;
+      box-shadow:none;
+      flex:1;
+      min-width: 160px;
     }
     .btn-danger{
-      background: transparent;
-      border: 1px solid rgba(255,51,51,0.45);
-      color: #ffb3b3;
-      font-family: 'Share Tech Mono';
-      letter-spacing: 0;
-      text-transform: none;
-      clip-path: none;
+      background:transparent;
+      border:1px solid rgba(255,51,51,0.45);
+      color:#ffb3b3;
+      font-family:'Share Tech Mono';
+      letter-spacing:0;
+      text-transform:none;
+      clip-path:none;
+      border-radius:14px;
+      padding:14px;
+      box-shadow:none;
+      flex:1;
+      min-width: 160px;
     }
+
+    /* Success screen polish */
+    #screen-success h1{
+      font-size:44px;
+      letter-spacing:2px;
+      text-shadow: 0 0 22px rgba(57,255,20,0.18);
+      margin-bottom:6px;
+    }
+    #screen-success .success-card{
+      width:100%;
+      max-width:520px;
+      margin-top:12px;
+    }
+
   </style>
 </head>
 
@@ -192,8 +528,10 @@
   <div class="scanlines"></div>
   <div class="trippy-bg"></div>
   <div class="grid-bg"></div>
+  <div class="smoke"></div>
+  <div class="sparkles"></div>
 
-  <!-- ✅ NEW MODAL -->
+  <!-- MODAL -->
   <div id="modal-overlay">
     <div class="modal">
       <h3 id="modal-title">⚠️ Possible Non-ID Image</h3>
@@ -210,7 +548,7 @@
   </div>
 
   <div id="loading-overlay">
-    <i class="fas fa-eye" style="font-size: 50px; color: #333;"></i>
+    <i class="fas fa-eye" style="font-size: 54px; color: rgba(255,255,255,0.14);"></i>
     <div class="scanner-beam"></div>
     <div class="loading-text" id="loading-msg">ANALYZING...</div>
     <div id="manual-options">
@@ -219,6 +557,7 @@
   </div>
 
   <div class="app-container">
+    <!-- LANDING -->
     <div id="screen-landing" class="screen active">
       <div class="header">
         <i class="fas fa-cannabis logo-icon"></i>
@@ -237,41 +576,73 @@
             <i class="fas fa-search"></i>
             <div>
               <h3 style="color:var(--neon-green);">Smart Scan</h3>
-              <p style="color:#aaa;">Auto-detects face area.</p>
+              <p>Helps catch obvious non-ID uploads before staff review.</p>
             </div>
           </div>
+
+          <div class="divider"></div>
 
           <div class="feature-row">
             <i class="fas fa-hand-pointer"></i>
             <div>
               <h3 style="color:var(--neon-purple);">Pro Editor</h3>
-              <p style="color:#aaa;">Zoom, Pan & Redact.</p>
+              <p>Zoom, rotate, pan & redact with black marker — mobile friendly.</p>
+            </div>
+          </div>
+
+          <div class="divider"></div>
+
+          <div class="feature-row">
+            <i class="fas fa-shield-halved"></i>
+            <div>
+              <h3 style="color:#fff;">Secure Upload</h3>
+              <p>Uploads are token-scoped. Staff approval happens inside the ticket.</p>
             </div>
           </div>
         </div>
       </div>
 
       <button id="startBtn" class="btn" onclick="goToScreen('screen-select')">START</button>
+      <button class="btn btn-outline" onclick="location.reload()">Reset</button>
     </div>
 
+    <!-- SELECT -->
     <div id="screen-select" class="screen">
       <div class="header">
-        <h2 style="font-family:'Rubik Glitch'; color:#fff;">UPLOAD ID</h2>
+        <div class="brand-name" style="font-size:28px;">UPLOAD ID</div>
+        <div class="chill-text">Pick a doc type — opens camera.</div>
       </div>
 
-      <div style="flex:1; display:flex; flex-direction:column; justify-content:center;">
+      <div class="card" style="width:100%;">
         <div class="grid">
-          <div class="option" onclick="triggerUpload()"><i class="far fa-id-card"></i><div>ID CARD</div></div>
-          <div class="option" onclick="triggerUpload()"><i class="fas fa-passport"></i><div>PASSPORT</div></div>
+          <div class="option" onclick="triggerUpload()">
+            <i class="far fa-id-card"></i><div>ID CARD</div>
+          </div>
+          <div class="option" onclick="triggerUpload()">
+            <i class="fas fa-passport"></i><div>PASSPORT</div>
+          </div>
+        </div>
+
+        <div class="divider"></div>
+
+        <div class="feature-row" style="margin:0;">
+          <i class="fas fa-lightbulb"></i>
+          <div>
+            <h3 style="color:var(--neon-orange);">Tip</h3>
+            <p>Fill the frame with the ID, avoid glare, keep text readable.</p>
+          </div>
         </div>
       </div>
+
+      <button class="btn btn-outline" onclick="goToScreen('screen-landing')">Back</button>
 
       <input type="file" id="fileInput" accept="image/*" capture="environment" onchange="handleImage(this)" style="display:none;">
     </div>
 
+    <!-- EDIT -->
     <div id="screen-edit" class="screen">
-      <div style="text-align:center; margin-bottom: 5px;">
-        <span style="color:var(--neon-green); font-family:'Share Tech Mono';">SECURE EDITOR ACTIVE</span>
+      <div class="header">
+        <div class="chill-text" style="color:var(--neon-green);">SECURE EDITOR ACTIVE</div>
       </div>
 
       <div id="editor-wrapper">
@@ -279,7 +650,7 @@
 
         <div id="tutorial-overlay" onclick="closeTutorial()">
           <div class="tut-card">
-            <h3 style="color:#fff; margin-bottom:20px;">CONTROLS</h3>
+            <h3 style="color:#fff; margin-bottom:14px; font-family:'Rubik Glitch';">CONTROLS</h3>
             <div class="tut-row">
               <div class="tut-icon">👆</div>
               <div><strong style="color:var(--neon-green)">ONE FINGER</strong><br><span style="color:#aaa; font-size:12px;">Draw Black Line</span></div>
@@ -288,7 +659,7 @@
               <div class="tut-icon">✌️</div>
               <div><strong style="color:var(--neon-purple)">TWO FINGERS</strong><br><span style="color:#aaa; font-size:12px;">Pinch to Zoom / Move</span></div>
             </div>
-            <button class="btn" style="font-size:16px; padding:10px;">GOT IT</button>
+            <button class="btn" style="font-size:14px; padding:12px; border-radius:14px;">GOT IT</button>
           </div>
         </div>
 
@@ -300,36 +671,42 @@
 
       <div class="toolbar-main">
         <div class="tool-btn" onclick="setBrush(10, this)">
-          <i class="fas fa-circle" style="font-size:8px;"></i>
-          <span>SMALL</span>
+          <i class="fas fa-circle" style="font-size:8px;"></i><span>SMALL</span>
         </div>
         <div class="tool-btn active" onclick="setBrush(30, this)">
-          <i class="fas fa-circle" style="font-size:14px;"></i>
-          <span>MED</span>
+          <i class="fas fa-circle" style="font-size:14px;"></i><span>MED</span>
         </div>
         <div class="tool-btn" onclick="setBrush(60, this)">
-          <i class="fas fa-circle" style="font-size:20px;"></i>
-          <span>LARGE</span>
+          <i class="fas fa-circle" style="font-size:20px;"></i><span>LARGE</span>
         </div>
         <div class="tool-btn" onclick="undoLast()">
-          <i class="fas fa-undo"></i>
-          <span>UNDO</span>
+          <i class="fas fa-undo"></i><span>UNDO</span>
         </div>
         <div class="tool-btn" onclick="rotateImage()">
-          <i class="fas fa-redo"></i>
-          <span>TURN</span>
+          <i class="fas fa-redo"></i><span>TURN</span>
         </div>
       </div>
 
       <button id="submitBtn" class="btn" onclick="finishVerification()">UPLOAD SECURELY</button>
+      <button class="btn btn-outline" onclick="goToScreen('screen-select')">Choose different photo</button>
     </div>
 
+    <!-- SUCCESS -->
     <div id="screen-success" class="screen" style="justify-content:center; align-items:center; text-align:center;">
-      <i class="fas fa-check-circle" style="font-size: 80px; color: var(--neon-green); margin-bottom:20px;"></i>
-      <h1 style="font-family:'Rubik Glitch';">SENT!</h1>
-      <p id="success-msg" style="color:#aaa;">Verification Pending...</p>
-      <button class="btn" onclick="location.reload()" style="margin-top:40px; background:transparent; border:1px solid #333;">NEW UPLOAD</button>
+      <div class="card success-card">
+        <i class="fas fa-check-circle" style="font-size: 78px; color: var(--neon-green); margin-bottom:14px;"></i>
+        <h1>SENT!</h1>
+        <p id="success-msg" style="color:#bdbdbd; font-family:'Share Tech Mono';">
+          Verification Pending...
+        </p>
+        <div class="divider"></div>
+        <p style="color:#9a9a9a; font-size:12px; line-height:1.35; font-family:'Share Tech Mono';">
+          Keep this tab open if you want, but staff review happens inside Discord.
+        </p>
+        <button class="btn btn-outline" onclick="location.reload()" style="margin-top:14px;">NEW UPLOAD</button>
+      </div>
     </div>
+
   </div>
 
   <script>
@@ -354,7 +731,6 @@
     let editorListenersBound = false;
     let lastObjectUrl = null;
 
-    // For modal flow
     let pendingContinue = null;
 
     function showModal({ title, text, reason }) {
@@ -368,10 +744,8 @@
     }
     function modalRetake() {
       hideModal();
-      // go back to select screen
       document.getElementById("loading-overlay").style.display = "none";
       goToScreen("screen-select");
-      // reopen file input
       setTimeout(() => document.getElementById("fileInput").click(), 150);
     }
     function modalContinue() {
@@ -455,12 +829,10 @@
       img.src = lastObjectUrl;
     }
 
-    // ✅ basic “ID-ish” heuristics (lightweight + non-guessy)
     function looksLikeCardByAspect(imgW, imgH) {
-      // ID cards are often ~1.58 aspect (credit card). We'll allow a wide window:
       const aspect = imgW / imgH;
-      const a = aspect >= 1.15 && aspect <= 2.05; // loose window
-      const b = (1/aspect) >= 1.15 && (1/aspect) <= 2.05; // if rotated
+      const a = aspect >= 1.15 && aspect <= 2.05;
+      const b = (1/aspect) >= 1.15 && (1/aspect) <= 2.05;
       return a || b;
     }
 
@@ -471,7 +843,6 @@
         const preds = await faceModel.estimateFaces(canvasRef, false);
         const hasFace = !!(preds && preds.length > 0);
 
-        // Card-ish heuristic
         const cardish = looksLikeCardByAspect(img.width, img.height);
         const tooSmall = (Math.max(img.width, img.height) < 600);
 
@@ -481,7 +852,6 @@
           return;
         }
 
-        // NO FACE detected -> warn strongly as "not an ID"
         aiResult = "NOT_DETECTED";
         clearTimeout(scanTimer);
         document.getElementById("manual-options").style.display = "block";

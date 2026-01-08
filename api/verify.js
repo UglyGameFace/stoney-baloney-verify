@@ -1,5 +1,6 @@
+// api/verify.js
 const { createClient } = require("@supabase/supabase-js");
-const { formidable } = require("formidable"); // ✅ correct for formidable v3
+const { IncomingForm } = require("formidable");
 const fs = require("fs");
 const https = require("https");
 const FormData = require("form-data");
@@ -21,6 +22,7 @@ function readStreamBody(stream) {
 }
 
 async function getWebhookInfo(webhookUrl) {
+  // GET https://discord.com/api/webhooks/{id}/{token}
   return new Promise((resolve, reject) => {
     https
       .get(webhookUrl, async (resp) => {
@@ -56,7 +58,7 @@ async function postDiscordChannelMessage(channelId, botToken, formData) {
       ...formData.getHeaders(),
       "Content-Length": length,
     },
-    timeout: 15000,
+    timeout: 20000,
   };
 
   return new Promise((resolve, reject) => {
@@ -84,19 +86,18 @@ module.exports = async function handler(req, res) {
     return res.status(500).json({ success: false, error: "Missing SUPABASE env vars" });
   }
   if (!botToken) {
+    // Buttons require bot-posting. Without bot token you can still upload,
+    // but you WON’T get working approve/deny interactions.
     return res.status(500).json({ success: false, error: "Missing DISCORD_BOT_TOKEN env var" });
   }
 
-  const supabase = createClient(supabaseUrl, serviceRoleKey, {
-    auth: { persistSession: false },
-  });
+  const supabase = createClient(supabaseUrl, serviceRoleKey, { auth: { persistSession: false } });
 
-  // ✅ Formidable v3 init
-  const form = formidable({
+  // ✅ Formidable v3 correct usage
+  const form = new IncomingForm({
     multiples: false,
     keepExtensions: true,
     maxFileSize: 4 * 1024 * 1024, // 4MB
-    maxFields: 20,
   });
 
   form.parse(req, async (err, fields, files) => {
@@ -106,26 +107,23 @@ module.exports = async function handler(req, res) {
       if (err) {
         return res.status(400).json({
           success: false,
-          error: "Bad upload payload",
+          error: "Bad upload payload (maybe too large)",
           details: String(err?.message || err),
         });
       }
 
       const token = Array.isArray(fields.token) ? fields.token[0] : fields.token;
       const status = Array.isArray(fields.status) ? fields.status[0] : fields.status;
+
       const uploaded = Array.isArray(files.file) ? files.file[0] : files.file;
+      const filepath = uploaded?.filepath || uploaded?.path; // (path fallback)
 
       if (!token) return res.status(400).json({ success: false, error: "Missing token" });
-      if (!uploaded?.filepath) return res.status(400).json({ success: false, error: "Missing file" });
+      if (!filepath) return res.status(400).json({ success: false, error: "Missing file" });
 
-      tempPath = uploaded.filepath;
+      tempPath = filepath;
 
-      // basic mime guard
-      const mime = uploaded.mimetype || "image/jpeg";
-      if (!mime.startsWith("image/")) {
-        return res.status(400).json({ success: false, error: "Only image uploads are allowed" });
-      }
-
+      // Lookup token row
       const { data: row, error: readErr } = await supabase
         .from("verification_tokens")
         .select("webhook_url, expires_at, used, user_id")
@@ -134,7 +132,7 @@ module.exports = async function handler(req, res) {
 
       if (readErr || !row) return res.status(400).json({ success: false, error: "Invalid token" });
       if (!row.webhook_url) return res.status(400).json({ success: false, error: "Token missing webhook_url" });
-      if (!row.user_id) return res.status(400).json({ success: false, error: "Token missing user_id (Discord user id)" });
+      if (!row.user_id) return res.status(400).json({ success: false, error: "Token missing user_id" });
       if (row.used) return res.status(400).json({ success: false, error: "Token already decided" });
 
       if (row.expires_at) {
@@ -144,16 +142,17 @@ module.exports = async function handler(req, res) {
         }
       }
 
-      // Discover channel_id from webhook
+      // Discover channel_id from webhook (no auth required)
       const webhookInfo = await getWebhookInfo(row.webhook_url);
       const channelId = webhookInfo.channel_id;
-      if (!channelId) {
-        return res.status(500).json({ success: false, error: "Could not resolve channel_id from webhook" });
-      }
+      if (!channelId) return res.status(500).json({ success: false, error: "Could not resolve channel_id from webhook" });
 
+      const mime = uploaded.mimetype || "image/jpeg";
       const filename = "stoney_verify.jpg";
 
+      // Build multipart for Discord channel message (as bot)
       const fd = new FormData();
+
       fd.append(
         "payload_json",
         JSON.stringify({
@@ -167,7 +166,6 @@ module.exports = async function handler(req, res) {
               timestamp: new Date().toISOString(),
             },
           ],
-          // ✅ BUTTONS SHOW UP because this message is posted as BOT (not webhook)
           components: [
             {
               type: 1,
@@ -180,39 +178,36 @@ module.exports = async function handler(req, res) {
         })
       );
 
-      // attach file
-      fd.append("files[0]", fs.createReadStream(tempPath), {
-        filename,
-        contentType: mime,
-      });
+      // Use stream (less memory)
+      fd.append("files[0]", fs.createReadStream(tempPath), { filename, contentType: mime });
 
       const discordRes = await postDiscordChannelMessage(channelId, botToken, fd);
+
       if (discordRes.status < 200 || discordRes.status >= 300) {
         return res.status(502).json({
           success: false,
           error: "Discord rejected message",
           status: discordRes.status,
-          details: (discordRes.body || "").slice(0, 900),
+          details: String(discordRes.body || "").slice(0, 1200),
         });
       }
 
-      await supabase
-        .from("verification_tokens")
-        .update({
-          submitted: true,
-          submitted_at: new Date().toISOString(),
-          ai_status: status || null,
-        })
-        .eq("token", token);
+      // Optional logging (don’t hard-fail if columns differ)
+      try {
+        await supabase
+          .from("verification_tokens")
+          .update({
+            submitted: true,
+            submitted_at: new Date().toISOString(),
+            ai_status: status || null,
+          })
+          .eq("token", token);
+      } catch (_) {}
 
       return res.status(200).json({ success: true });
     } catch (e) {
       console.error("verify api error:", e);
-      return res.status(500).json({
-        success: false,
-        error: "Internal server error",
-        details: String(e?.message || e),
-      });
+      return res.status(500).json({ success: false, error: "Internal server error", details: String(e?.message || e) });
     } finally {
       if (tempPath) fs.unlink(tempPath, () => {});
     }

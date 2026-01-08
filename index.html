@@ -177,7 +177,6 @@
         </div>
       </div>
 
-      <!-- camera on mobile, normal picker on desktop -->
       <input type="file" id="fileInput" accept="image/*" capture="environment" onchange="handleImage(this)" style="display:none;">
     </div>
 
@@ -200,7 +199,7 @@
               <div class="tut-icon">✌️</div>
               <div><strong style="color:var(--neon-purple)">TWO FINGERS</strong><br><span style="color:#aaa; font-size:12px;">Pinch to Zoom / Move</span></div>
             </div>
-            <button class="btn" style="font-size:16px; padding:10px;">GOT IT</button>
+            <button class="btn" style="font-size:16px; padding:10px;" onclick="closeTutorial(); event.stopPropagation();">GOT IT</button>
           </div>
         </div>
 
@@ -284,7 +283,6 @@
         console.log("AI Ready");
       } catch(e) {
         console.log("AI Failed", e);
-        // Do NOT auto-skip. We'll show SKIP button if it fails on run.
       }
     };
 
@@ -310,7 +308,6 @@
       document.getElementById("manual-options").style.display = "none";
       document.getElementById("loading-msg").innerText = "SCANNING...";
 
-      // reset editor state for this upload
       strokes = [];
       currentStroke = [];
       isDrawing = false;
@@ -318,14 +315,12 @@
       currentRotation = 0;
       aiResult = "SKIPPED";
 
-      // Longer failsafe for slow phones
       clearTimeout(scanTimer);
       scanTimer = setTimeout(() => {
         document.getElementById("manual-options").style.display = "block";
         document.getElementById("loading-msg").innerText = "TAKING TOO LONG — TAP SKIP";
       }, 6000);
 
-      // cleanup last object url
       try { if (lastObjectUrl) URL.revokeObjectURL(lastObjectUrl); } catch (_) {}
       lastObjectUrl = URL.createObjectURL(file);
 
@@ -352,7 +347,6 @@
           return;
         }
 
-        // No face detected -> require explicit choice
         aiResult = "NOT_DETECTED";
         clearTimeout(scanTimer);
         document.getElementById("manual-options").style.display = "block";
@@ -364,7 +358,6 @@
           location.reload();
         }
       } catch(e) {
-        // ✅ CRITICAL: do NOT auto-skip on AI failure
         aiResult = "AI_FAILED";
         clearTimeout(scanTimer);
         document.getElementById("manual-options").style.display = "block";
@@ -479,7 +472,7 @@
 
       canvasEl.addEventListener("touchend", e => {
         if (e.touches.length === 0) {
-          if (isDrawing && currentStroke.length > 0) {
+          if (isDrawing && currentStroke.length > 1) {
             strokes.push({ points: currentStroke, size: brushSize });
           }
           isDrawing = false;
@@ -541,94 +534,112 @@
       btn.classList.add("active");
     }
 
-    // =========================
-    // ✅ Upload: compress so Discord accepts it
-    // =========================
-    <script>
-function finishVerification() {
-  if (!VERIFY_TOKEN) {
-    alert("Invalid link. Please re-run /verify in Discord.");
-    return;
-  }
-
-  // ✅ capture last stroke if user uploads while drawing
-  if (isDrawing && currentStroke && currentStroke.length > 1) {
-    strokes.push({ points: currentStroke, size: brushSize });
-    currentStroke = [];
-    isDrawing = false;
-  }
-
-  const btn = document.getElementById("submitBtn");
-  btn.innerHTML = "UPLOADING...";
-  btn.disabled = true;
-
-  const MAX_DIM = 1280;
-  const scaleOut = Math.min(1, MAX_DIM / Math.max(img.width, img.height));
-
-  const outCan = document.createElement("canvas");
-  outCan.width = Math.max(1, Math.round(img.width * scaleOut));
-  outCan.height = Math.max(1, Math.round(img.height * scaleOut));
-
-  const ctx = outCan.getContext("2d");
-
-  ctx.save();
-  ctx.scale(scaleOut, scaleOut);
-
-  ctx.translate(img.width / 2, img.height / 2);
-  ctx.rotate(currentRotation * Math.PI / 180);
-  ctx.translate(-img.width / 2, -img.height / 2);
-
-  ctx.drawImage(img, 0, 0);
-
-  ctx.lineCap = "round";
-  ctx.lineJoin = "round";
-  ctx.strokeStyle = "#000";
-
-  for (const s of strokes) {
-    if (!s?.points || s.points.length < 2) continue;
-    ctx.lineWidth = s.size;
-    ctx.beginPath();
-    ctx.moveTo(s.points[0].x, s.points[0].y);
-    for (let i = 1; i < s.points.length; i++) ctx.lineTo(s.points[i].x, s.points[i].y);
-    ctx.stroke();
-  }
-
-  ctx.restore();
-
-  const MIME = "image/jpeg";
-  const QUALITY = 0.85;
-
-  outCan.toBlob(async (blob) => {
-    try {
-      if (!blob) throw new Error("Could not create image blob.");
-
-      if (blob.size > 3.5 * 1024 * 1024) {
-        throw new Error("Image still too large. Try again with a smaller photo.");
-      }
-
-      const form = new FormData();
-      form.append("file", blob, "stoney_verify.jpg");
-      form.append("token", VERIFY_TOKEN);
-      form.append("status", aiResult);
-
-      const res = await fetch("/api/verify", { method: "POST", body: form });
-
-      const raw = await res.text();
-      let data = {};
-      try { data = JSON.parse(raw); } catch (_) {}
-
-      if (res.ok && data.success) {
-        goToScreen("screen-success");
-      } else {
-        throw new Error(data.error || raw || "Server rejected upload");
-      }
-    } catch (err) {
-      alert("Upload Error: " + err.message);
-      btn.disabled = false;
-      btn.innerHTML = "UPLOAD SECURELY";
+    // -------------------------
+    // Upload (reliable JPEG)
+    // -------------------------
+    function dataURLToBlob(dataURL) {
+      const parts = dataURL.split(",");
+      const mimeMatch = parts[0].match(/:(.*?);/);
+      const mime = mimeMatch ? mimeMatch[1] : "image/jpeg";
+      const bin = atob(parts[1]);
+      const len = bin.length;
+      const arr = new Uint8Array(len);
+      for (let i = 0; i < len; i++) arr[i] = bin.charCodeAt(i);
+      return new Blob([arr], { type: mime });
     }
-  }, MIME, QUALITY);
-}
-</script>
+
+    function finishVerification() {
+      if (!VERIFY_TOKEN) {
+        alert("Invalid link. Please re-run /verify in Discord.");
+        return;
+      }
+
+      // capture last stroke if user uploads mid-draw
+      if (isDrawing && currentStroke && currentStroke.length > 1) {
+        strokes.push({ points: currentStroke, size: brushSize });
+        currentStroke = [];
+        isDrawing = false;
+      }
+
+      const btn = document.getElementById("submitBtn");
+      btn.innerHTML = "UPLOADING...";
+      btn.disabled = true;
+
+      const MAX_DIM = 1280;
+      const scaleOut = Math.min(1, MAX_DIM / Math.max(img.width, img.height));
+
+      const outCan = document.createElement("canvas");
+      outCan.width = Math.max(1, Math.round(img.width * scaleOut));
+      outCan.height = Math.max(1, Math.round(img.height * scaleOut));
+
+      const ctx = outCan.getContext("2d");
+
+      ctx.save();
+      ctx.scale(scaleOut, scaleOut);
+
+      ctx.translate(img.width / 2, img.height / 2);
+      ctx.rotate(currentRotation * Math.PI / 180);
+      ctx.translate(-img.width / 2, -img.height / 2);
+
+      ctx.drawImage(img, 0, 0);
+
+      ctx.lineCap = "round";
+      ctx.lineJoin = "round";
+      ctx.strokeStyle = "#000";
+
+      for (const s of strokes) {
+        if (!s?.points || s.points.length < 2) continue;
+        ctx.lineWidth = s.size;
+        ctx.beginPath();
+        ctx.moveTo(s.points[0].x, s.points[0].y);
+        for (let i = 1; i < s.points.length; i++) ctx.lineTo(s.points[i].x, s.points[i].y);
+        ctx.stroke();
+      }
+
+      ctx.restore();
+
+      const MIME = "image/jpeg";
+      const QUALITY = 0.85;
+
+      const sendBlob = async (blob) => {
+        try {
+          if (!blob) throw new Error("Could not create image blob.");
+          if (blob.size > 3.5 * 1024 * 1024) {
+            throw new Error("Image still too large. Try again with a smaller photo.");
+          }
+
+          const form = new FormData();
+          form.append("file", blob, "stoney_verify.jpg");
+          form.append("token", VERIFY_TOKEN);
+          form.append("status", aiResult);
+
+          const res = await fetch("/api/verify", { method: "POST", body: form });
+
+          const raw = await res.text();
+          let data = {};
+          try { data = JSON.parse(raw); } catch (_) {}
+
+          if (res.ok && data.success) {
+            goToScreen("screen-success");
+          } else {
+            throw new Error(data.error || raw || "Server rejected upload");
+          }
+        } catch (err) {
+          alert("Upload Error: " + err.message);
+          btn.disabled = false;
+          btn.innerHTML = "UPLOAD SECURELY";
+        }
+      };
+
+      // Prefer toBlob; fallback to dataURL if needed
+      if (outCan.toBlob) {
+        outCan.toBlob(sendBlob, MIME, QUALITY);
+      } else {
+        const dataURL = outCan.toDataURL(MIME, QUALITY);
+        const blob = dataURLToBlob(dataURL);
+        sendBlob(blob);
+      }
+    }
+  </script>
 </body>
 </html>

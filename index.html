@@ -26,7 +26,8 @@
 
     body {
       background-color: var(--deep-space); color: #fff; font-family: 'Fredoka', sans-serif;
-      min-height: 100dvh; display: flex; flex-direction: column; overflow-x: hidden; position: relative; touch-action: none;
+      min-height: 100dvh; display: flex; flex-direction: column; overflow-x: hidden; position: relative;
+      touch-action: none;
     }
 
     .trippy-bg { position: fixed; top: 0; left: 0; width: 200%; height: 200%; background: radial-gradient(circle, #1a0b2e 10%, #000000 90%); z-index: -3; animation: breathe 10s infinite alternate; }
@@ -115,6 +116,75 @@
       margin: 10px 0 0 0;
       display: none;
     }
+
+    /* ✅ NEW: modal */
+    #modal-overlay{
+      position: fixed; inset: 0;
+      background: rgba(0,0,0,0.88);
+      z-index: 3000;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+      backdrop-filter: blur(5px);
+    }
+    .modal {
+      width: 100%;
+      max-width: 520px;
+      background: #0b0b0b;
+      border: 1px solid rgba(57,255,20,0.35);
+      border-radius: 16px;
+      padding: 18px;
+      box-shadow: 0 0 28px rgba(57,255,20,0.14);
+    }
+    .modal h3{
+      font-family: 'Rubik Glitch';
+      letter-spacing: 1px;
+      font-size: 22px;
+      margin-bottom: 8px;
+      color: #fff;
+    }
+    .modal p{
+      font-family: 'Share Tech Mono';
+      color: #bdbdbd;
+      font-size: 13px;
+      line-height: 1.45;
+    }
+    .modal .pill{
+      display:inline-block;
+      margin-top:10px;
+      font-family: 'Share Tech Mono';
+      font-size: 12px;
+      padding: 6px 10px;
+      border-radius: 999px;
+      border: 1px solid rgba(255,170,0,0.45);
+      color: var(--neon-orange);
+      background: rgba(255,170,0,0.08);
+    }
+    .modal-actions{
+      margin-top: 14px;
+      display:flex;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+    .btn-secondary{
+      background: transparent;
+      border: 1px solid rgba(57,255,20,0.35);
+      color: var(--neon-green);
+      font-family: 'Share Tech Mono';
+      letter-spacing: 0;
+      text-transform: none;
+      clip-path: none;
+    }
+    .btn-danger{
+      background: transparent;
+      border: 1px solid rgba(255,51,51,0.45);
+      color: #ffb3b3;
+      font-family: 'Share Tech Mono';
+      letter-spacing: 0;
+      text-transform: none;
+      clip-path: none;
+    }
   </style>
 </head>
 
@@ -122,6 +192,22 @@
   <div class="scanlines"></div>
   <div class="trippy-bg"></div>
   <div class="grid-bg"></div>
+
+  <!-- ✅ NEW MODAL -->
+  <div id="modal-overlay">
+    <div class="modal">
+      <h3 id="modal-title">⚠️ Possible Non-ID Image</h3>
+      <p id="modal-text">
+        This photo doesn’t look like an ID card. Please retake the photo with the ID filling the frame,
+        in good lighting, with the text readable.
+      </p>
+      <div class="pill" id="modal-reason">Reason: NOT_DETECTED</div>
+      <div class="modal-actions">
+        <button class="btn btn-danger" onclick="modalRetake()">Retake Photo</button>
+        <button class="btn btn-secondary" onclick="modalContinue()">Continue Anyway</button>
+      </div>
+    </div>
+  </div>
 
   <div id="loading-overlay">
     <i class="fas fa-eye" style="font-size: 50px; color: #333;"></i>
@@ -268,6 +354,32 @@
     let editorListenersBound = false;
     let lastObjectUrl = null;
 
+    // For modal flow
+    let pendingContinue = null;
+
+    function showModal({ title, text, reason }) {
+      document.getElementById("modal-title").innerText = title || "⚠️ Possible Non-ID Image";
+      document.getElementById("modal-text").innerText = text || "This photo doesn’t look like an ID card.";
+      document.getElementById("modal-reason").innerText = "Reason: " + (reason || "UNKNOWN");
+      document.getElementById("modal-overlay").style.display = "flex";
+    }
+    function hideModal() {
+      document.getElementById("modal-overlay").style.display = "none";
+    }
+    function modalRetake() {
+      hideModal();
+      // go back to select screen
+      document.getElementById("loading-overlay").style.display = "none";
+      goToScreen("screen-select");
+      // reopen file input
+      setTimeout(() => document.getElementById("fileInput").click(), 150);
+    }
+    function modalContinue() {
+      hideModal();
+      if (typeof pendingContinue === "function") pendingContinue();
+      pendingContinue = null;
+    }
+
     window.onload = async () => {
       const params = new URLSearchParams(window.location.search);
       VERIFY_TOKEN = params.get("token");
@@ -327,7 +439,7 @@
 
       img.onload = () => {
         const aiCan = document.createElement("canvas");
-        const scale = Math.min(1, 400 / img.width);
+        const scale = Math.min(1, 500 / img.width);
         aiCan.width = Math.max(1, Math.floor(img.width * scale));
         aiCan.height = Math.max(1, Math.floor(img.height * scale));
         aiCan.getContext("2d").drawImage(img, 0, 0, aiCan.width, aiCan.height);
@@ -343,28 +455,55 @@
       img.src = lastObjectUrl;
     }
 
+    // ✅ basic “ID-ish” heuristics (lightweight + non-guessy)
+    function looksLikeCardByAspect(imgW, imgH) {
+      // ID cards are often ~1.58 aspect (credit card). We'll allow a wide window:
+      const aspect = imgW / imgH;
+      const a = aspect >= 1.15 && aspect <= 2.05; // loose window
+      const b = (1/aspect) >= 1.15 && (1/aspect) <= 2.05; // if rotated
+      return a || b;
+    }
+
     async function runAI(canvasRef) {
       try {
         if (!faceModel) faceModel = await blazeface.load();
 
         const preds = await faceModel.estimateFaces(canvasRef, false);
+        const hasFace = !!(preds && preds.length > 0);
 
-        if (preds && preds.length > 0) {
+        // Card-ish heuristic
+        const cardish = looksLikeCardByAspect(img.width, img.height);
+        const tooSmall = (Math.max(img.width, img.height) < 600);
+
+        if (hasFace) {
           aiResult = "VERIFIED";
           forceEditor();
           return;
         }
 
+        // NO FACE detected -> warn strongly as "not an ID"
         aiResult = "NOT_DETECTED";
         clearTimeout(scanTimer);
         document.getElementById("manual-options").style.display = "block";
-        document.getElementById("loading-msg").innerText = "NO FACE DETECTED";
+        document.getElementById("loading-msg").innerText = "NOT AN ID?";
 
-        if (confirm("No face detected. Continue anyway?")) {
-          forceEditor();
-        } else {
-          location.reload();
-        }
+        pendingContinue = () => forceEditor();
+
+        let reason = "NO_FACE";
+        if (!cardish) reason = "NOT_CARD_SHAPE";
+        if (tooSmall) reason = "TOO_SMALL";
+
+        showModal({
+          title: "⚠️ This doesn’t look like an ID",
+          text:
+            "We couldn’t detect an ID-style photo.\n\n" +
+            "✅ Retake with your ID filling the frame.\n" +
+            "✅ Good lighting, readable text.\n" +
+            "✅ Avoid random objects / product photos.\n\n" +
+            "You can still continue, but staff may deny it.",
+          reason
+        });
+
       } catch (e) {
         aiResult = "AI_FAILED";
         clearTimeout(scanTimer);
@@ -547,9 +686,16 @@
       });
     }
 
+    function fetchWithTimeout(url, opts, ms) {
+      const ctrl = new AbortController();
+      const t = setTimeout(() => ctrl.abort(), ms || 25000);
+      return fetch(url, { ...opts, signal: ctrl.signal })
+        .finally(() => clearTimeout(t));
+    }
+
     async function finishVerification() {
       if (!VERIFY_TOKEN) {
-        alert("Invalid link. Please re-run /verify in Discord.");
+        alert("Invalid link. Please open the verification link from Discord again.");
         return;
       }
 
@@ -619,7 +765,7 @@
         form.append("token", VERIFY_TOKEN);
         form.append("status", aiResult);
 
-        const res = await fetch("/api/verify", { method: "POST", body: form });
+        const res = await fetchWithTimeout("/api/verify", { method: "POST", body: form }, 25000);
 
         const raw = await res.text();
         let data = null;
@@ -639,7 +785,12 @@
 
         throw new Error((data && data.error) || raw || "Server rejected upload");
       } catch (err) {
-        alert("Upload Error: " + (err?.message || String(err)));
+        const msg = (err?.name === "AbortError")
+          ? "Upload timed out. Check your connection and try again."
+          : (err?.message || String(err));
+
+        alert("Upload Error: " + msg);
+
         btn.disabled = false;
         btn.innerHTML = "UPLOAD SECURELY";
       }

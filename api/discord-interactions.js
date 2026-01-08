@@ -2,102 +2,122 @@ const crypto = require("crypto");
 const https = require("https");
 const { createClient } = require("@supabase/supabase-js");
 
-function readRaw(req) {
+function readRawBody(req) {
   return new Promise((resolve, reject) => {
-    let data = "";
-    req.on("data", (c) => (data += c));
-    req.on("end", () => resolve(data));
+    const chunks = [];
+    req.on("data", (c) => chunks.push(c));
+    req.on("end", () => resolve(Buffer.concat(chunks)));
     req.on("error", reject);
   });
 }
 
+// Discord public key (hex 32 bytes) -> SPKI DER for ed25519
 function discordPublicKeyToKeyObject(hexKey) {
-  // SPKI DER prefix for Ed25519 public key
-  const der = Buffer.from("302a300506032b6570032100" + hexKey, "hex");
-  return crypto.createPublicKey({ key: der, format: "der", type: "spki" });
+  const raw = Buffer.from(hexKey, "hex");
+  if (raw.length !== 32) throw new Error("DISCORD_PUBLIC_KEY must be 32-byte hex");
+  const prefix = Buffer.from("302a300506032b6570032100", "hex"); // ASN.1 header for ed25519
+  const spki = Buffer.concat([prefix, raw]);
+  return crypto.createPublicKey({ key: spki, format: "der", type: "spki" });
 }
 
 function verifyDiscordSignature({ publicKeyHex, signatureHex, timestamp, rawBody }) {
   const keyObj = discordPublicKeyToKeyObject(publicKeyHex);
-  const msg = Buffer.from(timestamp + rawBody);
   const sig = Buffer.from(signatureHex, "hex");
+  const msg = Buffer.concat([Buffer.from(timestamp, "utf8"), rawBody]);
   return crypto.verify(null, msg, keyObj, sig);
 }
 
-function discordPut(botToken, path) {
-  const options = {
-    method: "PUT",
+function discordReq(method, path, botToken, jsonBody) {
+  const body = jsonBody ? Buffer.from(JSON.stringify(jsonBody)) : null;
+
+  const opts = {
+    method,
     hostname: "discord.com",
     path: `/api/v10${path}`,
-    headers: { Authorization: `Bot ${botToken}`, "Content-Length": "0" },
+    headers: {
+      Authorization: `Bot ${botToken}`,
+      "Content-Type": "application/json",
+      ...(body ? { "Content-Length": body.length } : { "Content-Length": 0 }),
+    },
     timeout: 15000,
   };
 
   return new Promise((resolve, reject) => {
-    const req = https.request(options, (resp) => {
-      // 204 is success for role add
-      resolve(resp.statusCode || 0);
+    const req = https.request(opts, (resp) => {
+      const chunks = [];
+      resp.on("data", (c) => chunks.push(c));
+      resp.on("end", () => {
+        resolve({
+          status: resp.statusCode || 0,
+          body: Buffer.concat(chunks).toString("utf8"),
+        });
+      });
     });
-    req.on("timeout", () => req.destroy(new Error("Discord timeout")));
+    req.on("timeout", () => req.destroy(new Error("Discord API timeout")));
     req.on("error", reject);
+    if (body) req.write(body);
     req.end();
   });
 }
 
 module.exports = async function handler(req, res) {
-  const PUBLIC_KEY = process.env.DISCORD_PUBLIC_KEY; // from Discord Dev Portal
-  const BOT_TOKEN = process.env.DISCORD_BOT_TOKEN;
-  const VERIFIED_ROLE_ID = process.env.DISCORD_VERIFIED_ROLE_ID;
-  const RESIDENT_ROLE_ID = process.env.DISCORD_RESIDENT_ROLE_ID;
-
-  // comma-separated staff roles: "123,456"
-  const STAFF_ROLE_IDS = (process.env.DISCORD_STAFF_ROLE_IDS || "")
-    .split(",")
-    .map((s) => s.trim())
-    .filter(Boolean);
+  const publicKey = process.env.DISCORD_PUBLIC_KEY;
+  const botToken = process.env.DISCORD_BOT_TOKEN;
 
   const supabaseUrl = process.env.SUPABASE_URL;
   const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
-  if (!PUBLIC_KEY || !BOT_TOKEN || !VERIFIED_ROLE_ID || !RESIDENT_ROLE_ID || STAFF_ROLE_IDS.length === 0) {
-    return res.status(500).json({ error: "Missing Discord env vars (PUBLIC_KEY/BOT_TOKEN/ROLE_IDS/STAFF_ROLE_IDS)" });
-  }
-  if (!supabaseUrl || !serviceRoleKey) return res.status(500).json({ error: "Missing Supabase env vars" });
+  const verifiedRoleId = process.env.DISCORD_VERIFIED_ROLE_ID;
+  const residentRoleId = process.env.DISCORD_RESIDENT_ROLE_ID;
 
-  const rawBody = await readRaw(req);
+  const staffRoleIds = (process.env.DISCORD_STAFF_ROLE_IDS || "")
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
+
+  if (!publicKey || !botToken) return res.status(500).send("Missing Discord env vars");
+  if (!supabaseUrl || !serviceRoleKey) return res.status(500).send("Missing Supabase env vars");
+  if (!verifiedRoleId || !residentRoleId) return res.status(500).send("Missing role env vars");
+  if (!staffRoleIds.length) return res.status(500).send("Missing DISCORD_STAFF_ROLE_IDS");
+
   const sig = req.headers["x-signature-ed25519"];
   const ts = req.headers["x-signature-timestamp"];
-
   if (!sig || !ts) return res.status(401).send("Missing signature headers");
 
+  const rawBody = await readRawBody(req);
+
   const ok = verifyDiscordSignature({
-    publicKeyHex: PUBLIC_KEY,
-    signatureHex: String(sig),
-    timestamp: String(ts),
+    publicKeyHex: publicKey,
+    signatureHex: sig,
+    timestamp: ts,
     rawBody,
   });
   if (!ok) return res.status(401).send("Bad signature");
 
-  const body = JSON.parse(rawBody);
+  const interaction = JSON.parse(rawBody.toString("utf8"));
 
-  // Ping/Pong
-  if (body.type === 1) return res.status(200).json({ type: 1 });
-
-  // Button interaction
-  if (body.type !== 3) return res.status(200).json({ type: 6 });
-
-  const customId = body.data?.custom_id || "";
-  const [ns, action, token] = customId.split(":");
-  if (ns !== "verify" || !action || !token) {
-    return res.status(200).json({
-      type: 4,
-      data: { content: "Invalid button payload.", flags: 64 },
-    });
+  // PING
+  if (interaction.type === 1) {
+    return res.status(200).json({ type: 1 });
   }
 
-  const clickerRoles = body.member?.roles || [];
-  const isStaff = clickerRoles.some((r) => STAFF_ROLE_IDS.includes(r));
+  // Button click
+  if (interaction.type !== 3) {
+    return res.status(200).json({ type: 4, data: { content: "Unhandled interaction type.", flags: 64 } });
+  }
 
+  const customId = interaction.data?.custom_id || "";
+  const parts = customId.split(":"); // verify:approve:TOKEN
+  if (parts.length !== 3 || parts[0] !== "verify") {
+    return res.status(200).json({ type: 4, data: { content: "Invalid button.", flags: 64 } });
+  }
+
+  const action = parts[1]; // approve | deny
+  const token = parts[2];
+
+  // Staff gate
+  const clickerRoles = interaction.member?.roles || [];
+  const isStaff = clickerRoles.some((r) => staffRoleIds.includes(r));
   if (!isStaff) {
     return res.status(200).json({
       type: 4,
@@ -107,82 +127,97 @@ module.exports = async function handler(req, res) {
 
   const supabase = createClient(supabaseUrl, serviceRoleKey, { auth: { persistSession: false } });
 
-  const { data: row } = await supabase
+  const { data: row, error: readErr } = await supabase
     .from("verification_tokens")
-    .select("user_id, used")
+    .select("token, user_id, used")
     .eq("token", token)
     .single();
 
-  if (!row?.user_id) {
+  if (readErr || !row) {
     return res.status(200).json({ type: 4, data: { content: "Token not found.", flags: 64 } });
   }
   if (row.used) {
     return res.status(200).json({ type: 4, data: { content: "Already decided.", flags: 64 } });
   }
 
-  const guildId = body.guild_id;
+  const guildId = interaction.guild_id;
   const userId = row.user_id;
-  const staffId = body.member?.user?.id;
 
-  if (action === "approve") {
-    // ✅ Assign roles
-    const s1 = await discordPut(BOT_TOKEN, `/guilds/${guildId}/members/${userId}/roles/${VERIFIED_ROLE_ID}`);
-    const s2 = await discordPut(BOT_TOKEN, `/guilds/${guildId}/members/${userId}/roles/${RESIDENT_ROLE_ID}`);
+  try {
+    if (action === "approve") {
+      // ✅ grant roles (in parallel)
+      const p1 = discordReq("PUT", `/guilds/${guildId}/members/${userId}/roles/${verifiedRoleId}`, botToken);
+      const p2 = discordReq("PUT", `/guilds/${guildId}/members/${userId}/roles/${residentRoleId}`, botToken);
+      const [r1, r2] = await Promise.all([p1, p2]);
 
-    if (![200, 201, 204].includes(s1) || ![200, 201, 204].includes(s2)) {
+      if (r1.status < 200 || r1.status >= 300) throw new Error(`Role add failed (verified): ${r1.body}`);
+      if (r2.status < 200 || r2.status >= 300) throw new Error(`Role add failed (resident): ${r2.body}`);
+
+      await supabase
+        .from("verification_tokens")
+        .update({
+          used: true,
+          decision: "approved",
+          decided_at: new Date().toISOString(),
+          decided_by: interaction.member?.user?.id || null,
+        })
+        .eq("token", token);
+
+      // ✅ Update the message + disable buttons
       return res.status(200).json({
-        type: 4,
-        data: { content: `Role assignment failed (codes: ${s1}, ${s2}). Check bot perms/role hierarchy.`, flags: 64 },
+        type: 7,
+        data: {
+          content: `✅ **APPROVED** by <@${interaction.member.user.id}> — roles granted to <@${userId}>`,
+          embeds: interaction.message?.embeds || [],
+          components: [
+            {
+              type: 1,
+              components: [
+                { type: 2, style: 3, label: "APPROVED", custom_id: "noop_a", disabled: true },
+                { type: 2, style: 4, label: "DENY", custom_id: "noop_d", disabled: true },
+              ],
+            },
+          ],
+        },
       });
     }
 
-    await supabase
-      .from("verification_tokens")
-      .update({ used: true, decision: "approved", decided_at: new Date().toISOString(), decided_by: staffId })
-      .eq("token", token);
+    if (action === "deny") {
+      await supabase
+        .from("verification_tokens")
+        .update({
+          used: true,
+          decision: "denied",
+          decided_at: new Date().toISOString(),
+          decided_by: interaction.member?.user?.id || null,
+        })
+        .eq("token", token);
 
-    // Update message + disable buttons
+      return res.status(200).json({
+        type: 7,
+        data: {
+          content: `❌ **DENIED** by <@${interaction.member.user.id}> — user: <@${userId}>`,
+          embeds: interaction.message?.embeds || [],
+          components: [
+            {
+              type: 1,
+              components: [
+                { type: 2, style: 3, label: "APPROVE", custom_id: "noop_a", disabled: true },
+                { type: 2, style: 4, label: "DENIED", custom_id: "noop_d", disabled: true },
+              ],
+            },
+          ],
+        },
+      });
+    }
+
+    return res.status(200).json({ type: 4, data: { content: "Unknown action.", flags: 64 } });
+  } catch (e) {
     return res.status(200).json({
-      type: 7,
-      data: {
-        content: `✅ **APPROVED** by <@${staffId}> — roles granted to <@${userId}>`,
-        components: [
-          {
-            type: 1,
-            components: [
-              { type: 2, style: 3, label: "APPROVE", custom_id: `verify:approve:${token}`, disabled: true },
-              { type: 2, style: 4, label: "DENY", custom_id: `verify:deny:${token}`, disabled: true },
-            ],
-          },
-        ],
-      },
+      type: 4,
+      data: { content: `❌ Error: ${String(e.message || e).slice(0, 1800)}`, flags: 64 },
     });
   }
-
-  if (action === "deny") {
-    await supabase
-      .from("verification_tokens")
-      .update({ used: true, decision: "denied", decided_at: new Date().toISOString(), decided_by: staffId })
-      .eq("token", token);
-
-    return res.status(200).json({
-      type: 7,
-      data: {
-        content: `⛔ **DENIED** by <@${staffId}>`,
-        components: [
-          {
-            type: 1,
-            components: [
-              { type: 2, style: 3, label: "APPROVE", custom_id: `verify:approve:${token}`, disabled: true },
-              { type: 2, style: 4, label: "DENY", custom_id: `verify:deny:${token}`, disabled: true },
-            ],
-          },
-        ],
-      },
-    });
-  }
-
-  return res.status(200).json({ type: 4, data: { content: "Unknown action.", flags: 64 } });
 };
 
 module.exports.config = { api: { bodyParser: false } };

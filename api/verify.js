@@ -1,7 +1,14 @@
-// /api/verify.js
-
 const { createClient } = require("@supabase/supabase-js");
-const formidable = require("formidable"); // ✅ FIX: correct import for formidable v3
+
+// ✅ Hardened formidable import for v3 differences
+const formidablePkg = require("formidable");
+const makeFormidable =
+  typeof formidablePkg === "function"
+    ? formidablePkg
+    : typeof formidablePkg?.formidable === "function"
+    ? formidablePkg.formidable
+    : null;
+
 const fs = require("fs");
 const https = require("https");
 const FormData = require("form-data");
@@ -65,6 +72,15 @@ module.exports = async function handler(req, res) {
     return res.status(405).json({ success: false, error: "Method not allowed" });
   }
 
+  if (!makeFormidable) {
+    return res.status(500).json({
+      success: false,
+      error: "Formidable import failed",
+      details:
+        "Expected require('formidable') to be a function or have a .formidable function. Check formidable version.",
+    });
+  }
+
   const supabaseUrl = process.env.SUPABASE_URL;
   const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
@@ -78,8 +94,7 @@ module.exports = async function handler(req, res) {
     auth: { persistSession: false },
   });
 
-  // ✅ Create formidable parser (v3)
-  const form = formidable({
+  const form = makeFormidable({
     multiples: false,
     keepExtensions: true,
     maxFileSize: 4 * 1024 * 1024,
@@ -99,16 +114,14 @@ module.exports = async function handler(req, res) {
 
       const token = String(pickFirst(fields.token) || "").trim();
       const status = String(pickFirst(fields.status) || "").trim() || "UNKNOWN";
-
       const uploaded = pickFirst(files.file);
 
       if (!token) {
         return res.status(400).json({ success: false, error: "Missing token" });
       }
 
-      // formidable can use filepath (v3) or path (older)
+      // formidable v3 -> filepath, older -> path
       tempPath = uploaded?.filepath || uploaded?.path || null;
-
       if (!tempPath) {
         return res.status(400).json({ success: false, error: "Missing file" });
       }
@@ -127,11 +140,9 @@ module.exports = async function handler(req, res) {
           .status(400)
           .json({ success: false, error: "Token already used" });
       }
-
       if (row.expires_at && Date.now() > new Date(row.expires_at).getTime()) {
         return res.status(400).json({ success: false, error: "Token expired" });
       }
-
       if (!row.webhook_url) {
         return res.status(500).json({
           success: false,
@@ -168,7 +179,11 @@ module.exports = async function handler(req, res) {
       fd.append("payload_json", JSON.stringify(payload));
       fd.append("files[0]", buf, { filename, contentType: mime });
 
-      const webhookRes = await postWebhook(`${row.webhook_url}?wait=true`, fd);
+      // ✅ safe add ?wait=true without breaking existing query params
+      const whUrl = new URL(row.webhook_url);
+      whUrl.searchParams.set("wait", "true");
+
+      const webhookRes = await postWebhook(whUrl.toString(), fd);
 
       if (webhookRes.status < 200 || webhookRes.status >= 300) {
         return res.status(502).json({
@@ -179,8 +194,7 @@ module.exports = async function handler(req, res) {
         });
       }
 
-      // ✅ Update token row (safe — if columns don't exist, Supabase will error)
-      // If your table doesn't have these cols, either add them or remove this update.
+      // Optional: this is okay to "warn and continue" if columns don't exist
       const upd = await supabase
         .from("verification_tokens")
         .update({
@@ -190,7 +204,6 @@ module.exports = async function handler(req, res) {
         })
         .eq("token", token);
 
-      // If update fails because columns don't exist, we still consider upload success.
       if (upd?.error) {
         console.warn("Supabase update warning:", upd.error?.message || upd.error);
       }
@@ -210,5 +223,4 @@ module.exports = async function handler(req, res) {
   });
 };
 
-// IMPORTANT for Vercel: disable default bodyParser so formidable can read the stream
 module.exports.config = { api: { bodyParser: false } };

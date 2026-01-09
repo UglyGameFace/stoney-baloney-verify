@@ -520,7 +520,6 @@
       max-width:520px;
       margin-top:12px;
     }
-
   </style>
 </head>
 
@@ -703,7 +702,12 @@
         <p style="color:#9a9a9a; font-size:12px; line-height:1.35; font-family:'Share Tech Mono';">
           Keep this tab open if you want, but staff review happens inside Discord.
         </p>
+
         <button class="btn btn-outline" onclick="location.reload()" style="margin-top:14px;">NEW UPLOAD</button>
+        <button class="btn btn-outline" onclick="closeTab()" style="margin-top:10px;">CLOSE TAB</button>
+        <p id="closeHint" style="display:none; margin-top:10px; color:#9a9a9a; font-size:12px; line-height:1.35; font-family:'Share Tech Mono';">
+          If your browser blocks auto-close, just close this tab manually.
+        </p>
       </div>
     </div>
 
@@ -733,6 +737,9 @@
 
     let pendingContinue = null;
 
+    // ✅ Upgrade: prevents double uploads if someone taps twice
+    let uploadInProgress = false;
+
     function showModal({ title, text, reason }) {
       document.getElementById("modal-title").innerText = title || "⚠️ Possible Non-ID Image";
       document.getElementById("modal-text").innerText = text || "This photo doesn’t look like an ID card.";
@@ -754,6 +761,17 @@
       pendingContinue = null;
     }
 
+    // ✅ Upgrade: best-effort tab close button
+    function closeTab() {
+      window.close();
+      setTimeout(() => {
+        const hint = document.getElementById("closeHint");
+        if (hint) hint.style.display = "block";
+        // Optional fallback:
+        // window.location.href = "about:blank";
+      }, 300);
+    }
+
     window.onload = async () => {
       const params = new URLSearchParams(window.location.search);
       VERIFY_TOKEN = params.get("token");
@@ -763,6 +781,17 @@
         const startBtn = document.getElementById("startBtn");
         if (startBtn) startBtn.disabled = true;
       }
+
+      // ✅ Upgrade: bind file input listeners once for mobile weirdness
+      try {
+        const input = document.getElementById("fileInput");
+        if (input) {
+          // Some mobile browsers fire "cancel" without onchange; this keeps UI feeling alive.
+          input.addEventListener("click", () => {
+            // no-op anchor
+          });
+        }
+      } catch(_) {}
 
       try {
         faceModel = await blazeface.load();
@@ -777,18 +806,33 @@
       document.getElementById(id).classList.add("active");
     }
 
+    // ✅ FIXED: mobile-safe picker open (prevents first-open “dead click” / “reload” feeling)
     function triggerUpload() {
       if (!VERIFY_TOKEN) {
         alert("Invalid link. Please open the verify link from Discord (it must include ?token=).");
         return;
       }
-      document.getElementById("fileInput").click();
+
+      const input = document.getElementById("fileInput");
+      if (!input) return;
+
+      // HARD reset input so onchange fires reliably on mobile
+      input.value = "";
+      input.type = "text";
+      input.type = "file";
+
+      // Delay helps iOS/Android avoid ignoring the first picker open
+      setTimeout(() => {
+        try { input.click(); } catch (e) { console.log("File picker blocked:", e); }
+      }, 120);
     }
 
     function handleImage(input) {
       if (!input.files || !input.files[0]) return;
 
       const file = input.files[0];
+
+      // ✅ Upgrade: clear immediately so selecting “same file” still triggers later
       input.value = "";
 
       document.getElementById("loading-overlay").style.display = "flex";
@@ -1069,6 +1113,10 @@
         return;
       }
 
+      // ✅ Upgrade: stop double-submits
+      if (uploadInProgress) return;
+      uploadInProgress = true;
+
       if (isDrawing && currentStroke && currentStroke.length > 1) {
         strokes.push({ points: currentStroke, size: brushSize });
         currentStroke = [];
@@ -1076,6 +1124,8 @@
       }
 
       const btn = document.getElementById("submitBtn");
+      const originalLabel = btn.innerHTML;
+
       btn.innerHTML = "UPLOADING...";
       btn.disabled = true;
 
@@ -1135,7 +1185,12 @@
         form.append("token", VERIFY_TOKEN);
         form.append("status", aiResult);
 
-        const res = await fetchWithTimeout("/api/verify", { method: "POST", body: form }, 25000);
+        // ✅ FIX: prevent caching weirdness so first upload never “acts like it did nothing”
+        const res = await fetchWithTimeout("/api/verify", {
+          method: "POST",
+          body: form,
+          cache: "no-store"
+        }, 25000);
 
         const raw = await res.text();
         let data = null;
@@ -1150,6 +1205,7 @@
 
         if (data && data.success) {
           goToScreen("screen-success");
+          uploadInProgress = false;
           return;
         }
 
@@ -1162,7 +1218,8 @@
         alert("Upload Error: " + msg);
 
         btn.disabled = false;
-        btn.innerHTML = "UPLOAD SECURELY";
+        btn.innerHTML = originalLabel;
+        uploadInProgress = false;
       }
     }
   </script>

@@ -144,6 +144,85 @@
       animation:float 3s ease-in-out infinite;
     }
 
+    .brand-logo{
+      width:72px;
+      height:72px;
+      border-radius:18px;
+      object-fit:cover;
+      box-shadow:0 0 22px rgba(0,255,153,.25);
+      border:1px solid rgba(0,255,153,.18);
+      margin-bottom:10px;
+    }
+
+    .trust-box{
+      width:100%;
+      max-width:480px;
+      margin:18px auto 0;
+      padding:14px 14px;
+      border-radius:18px;
+      border:1px solid rgba(255,255,255,.10);
+      background:rgba(0,0,0,.35);
+      backdrop-filter: blur(12px);
+      text-align:left;
+    }
+    .trust-head{
+      display:flex;
+      align-items:center;
+      gap:10px;
+      font-weight:800;
+      color:#fff;
+      margin-bottom:8px;
+    }
+    .trust-head i{ color: var(--neon-green); }
+    .trust-list{
+      margin:0;
+      padding-left:18px;
+      color:rgba(255,255,255,.84);
+      font-size:14px;
+      line-height:1.45;
+    }
+    .trust-list li{ margin:6px 0; }
+    .btn-sm{ padding:10px 14px; font-size:14px; margin-top:10px; }
+
+    /* Privacy modal (separate from AI-check modal; no behavior impact) */
+    .privacy-overlay{
+      position:fixed; inset:0;
+      display:none;
+      align-items:center;
+      justify-content:center;
+      background:rgba(0,0,0,.72);
+      z-index:9999;
+      padding:18px;
+    }
+    .privacy-card{
+      width:100%;
+      max-width:560px;
+      border-radius:18px;
+      border:1px solid rgba(255,255,255,.14);
+      background:rgba(16,16,16,.92);
+      padding:16px;
+      box-shadow:0 0 60px rgba(0,0,0,.55);
+    }
+    .privacy-card h2{
+      margin:0 0 10px 0;
+      font-size:18px;
+      letter-spacing:.5px;
+      color:#fff;
+    }
+    .privacy-card p,.privacy-card li{
+      color:rgba(255,255,255,.84);
+      font-size:14px;
+      line-height:1.45;
+    }
+    .privacy-actions{
+      display:flex;
+      gap:10px;
+      justify-content:flex-end;
+      margin-top:12px;
+    }
+
+
+
     .brand-name{
       font-family:'Rubik Glitch', cursive;
       font-size:34px;
@@ -521,6 +600,18 @@
       margin-top:12px;
     }
   </style>
+
+  <!-- Branding -->
+  <link rel="icon" href="/favicon.ico" />
+  <link rel="apple-touch-icon" sizes="180x180" href="/stoney-logo-180.png" />
+  <meta name="description" content="Official Stoney Baloney verification portal. Token-scoped, staff-reviewed verification inside your private Discord ticket." />
+
+  <!-- Social preview (optional but builds trust) -->
+  <meta property="og:title" content="Stoney Baloney Verification" />
+  <meta property="og:description" content="Token-scoped upload. Staff review happens inside your private Discord ticket." />
+  <meta property="og:image" content="/stoney-logo-512.png" />
+  <meta name="twitter:card" content="summary" />
+
 </head>
 
 <body>
@@ -559,7 +650,7 @@
     <!-- LANDING -->
     <div id="screen-landing" class="screen active">
       <div class="header">
-        <i class="fas fa-cannabis logo-icon"></i>
+        <img class="brand-logo" src="/stoney-logo-256.webp" alt="Stoney Baloney logo" loading="eager" decoding="async" />
         <div class="brand-name">STONEY<br>BALONEY</div>
         <div class="chill-text">// SECURE_VERIFY_V6</div>
 
@@ -599,6 +690,17 @@
             </div>
           </div>
         </div>
+      </div>
+
+
+      <div class="trust-box">
+        <div class="trust-head"><i class="fas fa-lock"></i><span>Privacy & trust</span></div>
+        <ul class="trust-list">
+          <li><b>Redact first</b>: use the editor to cover ID numbers/address before uploading.</li>
+          <li><b>Metadata removed</b>: the image is re-encoded on your device (no EXIF/location data).</li>
+          <li><b>Token-scoped access</b>: this page only works from your Discord ticket link.</li>
+        </ul>
+        <button class="btn btn-outline btn-sm" onclick="openPrivacyModal()">How your ID is handled</button>
       </div>
 
       <button id="startBtn" class="btn" onclick="goToScreen('screen-select')">START</button>
@@ -1222,6 +1324,37 @@
         uploadInProgress = false;
       }
     }
-  </script>
+  
+    // Privacy modal (trust helper)
+    function openPrivacyModal(){
+      const el = document.getElementById('privacyOverlay');
+      if(el){ el.style.display = 'flex'; }
+    }
+    function closePrivacyModal(){
+      const el = document.getElementById('privacyOverlay');
+      if(el){ el.style.display = 'none'; }
+    }
+
+</script>
+
+  <!-- Privacy / Trust modal -->
+  <div id="privacyOverlay" class="privacy-overlay" role="dialog" aria-modal="true" aria-labelledby="privacyTitle">
+    <div class="privacy-card">
+      <h2 id="privacyTitle">How your ID is handled</h2>
+      <p style="margin-top:0">
+        This verification exists to keep the community safe. You control what you share — please scrub out anything not needed. All we need is your face and D.O.B.
+      </p>
+      <ul>
+        <li><b>Where it goes:</b> your upload is sent to your private Discord verification ticket for staff review.</li>
+        <li><b>What we store:</b> the bot database stores a short-lived token + timestamps/status (not your ID image).</li>
+        <li><b>Deletion:</b> once verification is completed, the ticket is closed and removed. After that, Discord file links always expire, so ID images can’t be reopened later.</li>
+      </ul>
+      <div class="privacy-actions">
+        <button class="btn btn-outline" onclick="closePrivacyModal()">Close</button>
+      </div>
+    </div>
+  </div>
+
+
 </body>
 </html>

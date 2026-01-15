@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <meta name="theme-color" content="#050505" />
   <title>Stoney Baloney Verify</title>
 
@@ -39,9 +39,7 @@
       flex-direction:column;
       overflow-x:hidden;
       position:relative;
-      overflow-y:auto;
-      -webkit-overflow-scrolling: touch;
-      touch-action: manipulation;
+      touch-action:none;
     }
 
     /* ====== Background layers (stoner + synth) ====== */
@@ -124,16 +122,13 @@
     /* ====== Layout ====== */
     .app-container{
       flex:1;
-      min-height:100dvh;
       display:flex;
       flex-direction:column;
       width:100%;
       max-width:540px;
       margin:0 auto;
       padding:16px;
-      padding-top: calc(16px + env(safe-area-inset-top));
-      padding-bottom: calc(16px + env(safe-area-inset-bottom));
-z-index:10;
+      z-index:10;
       position:relative;
     }
 
@@ -319,10 +314,8 @@ z-index:10;
     }
 
     /* ====== Screens ====== */
-    .screen{display:none; flex-direction:column; flex:1; min-height:0;}
-    .screen.active{display:flex; animation:fade-in .4s ease; overflow-y:auto; -webkit-overflow-scrolling: touch;}
-    #screen-edit.screen.active{overflow:hidden;}
-
+    .screen{display:none; flex-direction:column; flex:1; height:100%;}
+    .screen.active{display:flex; animation:fade-in .4s ease;}
 
     .grid{
       display:grid;
@@ -606,7 +599,48 @@ z-index:10;
       max-width:520px;
       margin-top:12px;
     }
-  </style>
+  
+/* =========================
+   RESPONSIVE / MOBILE FIXES
+   ========================= */
+*,*::before,*::after{box-sizing:border-box;}
+img{max-width:100%;height:auto;}
+
+/* Allow mobile scroll + zoom. Canvas still uses touch-action:none. */
+body{touch-action: pan-y pinch-zoom;}
+
+/* Prevent screens from being "stuck" at 100% height with no scroll on small devices */
+.screen{min-height:0; overflow-y:auto; -webkit-overflow-scrolling:touch;}
+
+/* Modals should never run off-screen */
+.modal{max-height:calc(100dvh - 48px); overflow:auto;}
+
+/* Brand logo scales on small screens */
+.brand-logo{width:clamp(56px, 18vw, 84px); height:auto; aspect-ratio:1/1;}
+
+/* Keep the app comfortable around notches / home indicators */
+.app-container{
+  padding-top: calc(16px + env(safe-area-inset-top));
+  padding-bottom: calc(16px + env(safe-area-inset-bottom));
+}
+
+/* Mobile layout tweaks */
+@media (max-width: 480px){
+  .app-container{padding-left:12px; padding-right:12px;}
+  .brand-name{font-size:clamp(26px, 10vw, 34px);}
+  .chill-text{font-size:12px;}
+  .toolbar-main{grid-template-columns:repeat(3, 1fr);}
+  .btn{width:100%;}
+  .btn + .btn{margin-top:10px;}
+}
+
+/* Ultra small devices */
+@media (max-width: 360px){
+  .toolbar-main{grid-template-columns:repeat(2, 1fr);}
+  .option{font-size:12px;}
+}
+
+</style>
 
   <!-- Branding -->
   <link rel="icon" href="/favicon.ico" />
@@ -1349,13 +1383,12 @@ z-index:10;
     <div class="privacy-card">
       <h2 id="privacyTitle">How your ID is handled</h2>
       <p style="margin-top:0">
-        This verification exists to keep the community safe. You control what you share — please redact anything not needed.
+        This verification exists to keep the community safe. You control what you share — please redact anything not needed. We only need your face and D.O.B.
       </p>
       <ul>
         <li><b>Where it goes:</b> your upload is sent to your private Discord verification ticket for staff review.</li>
         <li><b>What we store:</b> the bot database stores a short-lived token + timestamps/status (not your ID image).</li>
-        <li><b>What you should never send:</b> passwords, seed phrases, or payment info.</li>
-        <li><b>Deletion:</b> your upload exists only in your private verification ticket for staff review. Once the ticket is closed, the channel is deleted and the images are no longer accessible.</li>
+        <li><b>Deletion:</b> once verification is completed, the ticket is closed and removed. Because transcripts only reference Discord attachment links (they don’t embed files), ID images won’t be accessible after the ticket is deleted.</li>
       </ul>
       <div class="privacy-actions">
         <button class="btn btn-outline" onclick="closePrivacyModal()">Close</button>

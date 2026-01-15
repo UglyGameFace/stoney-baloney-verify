@@ -39,7 +39,9 @@
       flex-direction:column;
       overflow-x:hidden;
       position:relative;
-      touch-action:none;
+      overflow-y:auto;
+      -webkit-overflow-scrolling: touch;
+      touch-action: manipulation;
     }
 
     /* ====== Background layers (stoner + synth) ====== */
@@ -122,13 +124,16 @@
     /* ====== Layout ====== */
     .app-container{
       flex:1;
+      min-height:100dvh;
       display:flex;
       flex-direction:column;
       width:100%;
       max-width:540px;
       margin:0 auto;
       padding:16px;
-      z-index:10;
+      padding-top: calc(16px + env(safe-area-inset-top));
+      padding-bottom: calc(16px + env(safe-area-inset-bottom));
+z-index:10;
       position:relative;
     }
 
@@ -314,8 +319,10 @@
     }
 
     /* ====== Screens ====== */
-    .screen{display:none; flex-direction:column; flex:1; height:100%;}
-    .screen.active{display:flex; animation:fade-in .4s ease;}
+    .screen{display:none; flex-direction:column; flex:1; min-height:0;}
+    .screen.active{display:flex; animation:fade-in .4s ease; overflow-y:auto; -webkit-overflow-scrolling: touch;}
+    #screen-edit.screen.active{overflow:hidden;}
+
 
     .grid{
       display:grid;
@@ -1342,12 +1349,13 @@
     <div class="privacy-card">
       <h2 id="privacyTitle">How your ID is handled</h2>
       <p style="margin-top:0">
-        This verification exists to keep the community safe. You control what you share — please scrub out anything not needed. All we need is your face and D.O.B.
+        This verification exists to keep the community safe. You control what you share — please redact anything not needed.
       </p>
       <ul>
         <li><b>Where it goes:</b> your upload is sent to your private Discord verification ticket for staff review.</li>
         <li><b>What we store:</b> the bot database stores a short-lived token + timestamps/status (not your ID image).</li>
-        <li><b>Deletion:</b> once verification is completed, the ticket is closed and removed. After that, Discord file links always expire, so ID images can’t be reopened later.</li>
+        <li><b>What you should never send:</b> passwords, seed phrases, or payment info.</li>
+        <li><b>Deletion:</b> your upload exists only in your private verification ticket for staff review. Once the ticket is closed, the channel is deleted and the images are no longer accessible.</li>
       </ul>
       <div class="privacy-actions">
         <button class="btn btn-outline" onclick="closePrivacyModal()">Close</button>

@@ -39,7 +39,7 @@
       flex-direction:column;
       overflow-x:hidden;
       position:relative;
-      touch-action:none;
+      touch-action: pan-y pinch-zoom;
     }
 
     /* ====== Background layers (stoner + synth) ====== */
@@ -194,7 +194,9 @@
       z-index:9999;
       padding:18px;
     }
-    .privacy-card{
+    
+    .privacy-overlay.is-open{display:flex;}
+.privacy-card{
       width:100%;
       max-width:560px;
       border-radius:18px;
@@ -363,7 +365,7 @@
       margin-bottom:10px;
       box-shadow: 0 0 26px rgba(57,255,20,0.12);
     }
-    canvas{display:block; width:100%; height:100%; touch-action:none;}
+    canvas{display:block; width:100%; height:100%; touch-action: pan-y pinch-zoom;}
 
     .toolbar-main{
       display:grid;
@@ -741,7 +743,7 @@ body{touch-action: pan-y pinch-zoom;}
           <li><b>Metadata removed</b>: the image is re-encoded on your device (no EXIF/location data).</li>
           <li><b>Token-scoped access</b>: this page only works from your Discord ticket link.</li>
         </ul>
-        <button class="btn btn-outline btn-sm" onclick="openPrivacyModal()">How your ID is handled</button>
+        <button id="privacyBtn" type="button" class="btn btn-outline btn-sm">How your ID is handled</button>
       </div>
 
       <button id="startBtn" class="btn" onclick="goToScreen('screen-select')">START</button>
@@ -1369,12 +1371,32 @@ body{touch-action: pan-y pinch-zoom;}
     // Privacy modal (trust helper)
     function openPrivacyModal(){
       const el = document.getElementById('privacyOverlay');
-      if(el){ el.style.display = 'flex'; }
+      if(el){ el.classList.add('is-open'); }
     }
     function closePrivacyModal(){
       const el = document.getElementById('privacyOverlay');
-      if(el){ el.style.display = 'none'; }
+      if(el){ el.classList.remove('is-open'); }
     }
+
+    // Make functions accessible even in stricter runtimes
+    try { window.openPrivacyModal = openPrivacyModal; window.closePrivacyModal = closePrivacyModal; } catch(_){}
+
+    // Robust desktop/mobile bindings (avoid inline onclick quirks)
+    document.addEventListener('DOMContentLoaded', () => {
+      const btn = document.getElementById('privacyBtn');
+      const overlay = document.getElementById('privacyOverlay');
+      if(btn) btn.addEventListener('click', (e) => { e.preventDefault(); openPrivacyModal(); });
+
+      // Click outside the card closes
+      if(overlay) overlay.addEventListener('click', (e) => {
+        if(e.target === overlay) closePrivacyModal();
+      });
+
+      // ESC closes on desktop
+      document.addEventListener('keydown', (e) => {
+        if(e.key === 'Escape') closePrivacyModal();
+      });
+    });
 
 </script>
 
@@ -1383,7 +1405,7 @@ body{touch-action: pan-y pinch-zoom;}
     <div class="privacy-card">
       <h2 id="privacyTitle">How your ID is handled</h2>
       <p style="margin-top:0">
-        This verification exists to keep the community safe. You control what you share — please redact anything not needed. We only need your face and D.O.B.
+        This verification exists to keep the community safe. You control what you share — please redact anything not needed. We just need your face and D.O.B.
       </p>
       <ul>
         <li><b>Where it goes:</b> your upload is sent to your private Discord verification ticket for staff review.</li>
@@ -1391,7 +1413,7 @@ body{touch-action: pan-y pinch-zoom;}
         <li><b>Deletion:</b> once verification is completed, the ticket is closed and removed. Because transcripts only reference Discord attachment links (they don’t embed files), ID images won’t be accessible after the ticket is deleted.</li>
       </ul>
       <div class="privacy-actions">
-        <button class="btn btn-outline" onclick="closePrivacyModal()">Close</button>
+        <button type="button" class="btn btn-outline" onclick="closePrivacyModal()">Close</button>
       </div>
     </div>
   </div>

@@ -1371,26 +1371,55 @@ body{touch-action: pan-y pinch-zoom;}
     // Privacy modal (trust helper)
     function openPrivacyModal(){
       const el = document.getElementById('privacyOverlay');
-      if(el){ el.classList.add('is-open'); }
+      if(el){ el.classList.add('is-open'); el.setAttribute('aria-hidden','false'); }
     }
     function closePrivacyModal(){
       const el = document.getElementById('privacyOverlay');
-      if(el){ el.classList.remove('is-open'); }
+      if(el){ el.classList.remove('is-open'); el.setAttribute('aria-hidden','true'); }
     }
 
     // Make functions accessible even in stricter runtimes
     try { window.openPrivacyModal = openPrivacyModal; window.closePrivacyModal = closePrivacyModal; } catch(_){}
 
-    // Robust desktop/mobile bindings (avoid inline onclick quirks)
-    document.addEventListener('DOMContentLoaded', () => {
-      const btn = document.getElementById('privacyBtn');
-      const overlay = document.getElementById('privacyOverlay');
-      if(btn) btn.addEventListener('click', (e) => { e.preventDefault(); openPrivacyModal(); });
+    // Robust privacy modal bindings (works even if DOM is re-rendered)
+    (function bindPrivacyModal(){
+      function onClick(e){
+        const openBtn = e.target && e.target.closest ? e.target.closest('#privacyBtn') : null;
+        if(openBtn){
+          e.preventDefault();
+          openPrivacyModal();
+          return;
+        }
+        const closeBtn = e.target && e.target.closest ? e.target.closest('#privacyCloseBtn') : null;
+        if(closeBtn){
+          e.preventDefault();
+          closePrivacyModal();
+          return;
+        }
+        // Click outside the card closes
+        const overlay = document.getElementById('privacyOverlay');
+        if(overlay && e.target === overlay){
+          closePrivacyModal();
+          return;
+        }
+      }
 
-      // Click outside the card closes
-      if(overlay) overlay.addEventListener('click', (e) => {
-        if(e.target === overlay) closePrivacyModal();
-      });
+      function onKey(e){
+        if(e && e.key === 'Escape') closePrivacyModal();
+      }
+
+      function bind(){
+        document.addEventListener('click', onClick, true);
+        document.addEventListener('keydown', onKey, true);
+      }
+
+      if(document.readyState === 'loading'){
+        document.addEventListener('DOMContentLoaded', bind, { once: true });
+      } else {
+        bind();
+      }
+    })();
+
 
       // ESC closes on desktop
       document.addEventListener('keydown', (e) => {
@@ -1401,7 +1430,7 @@ body{touch-action: pan-y pinch-zoom;}
 </script>
 
   <!-- Privacy / Trust modal -->
-  <div id="privacyOverlay" class="privacy-overlay" role="dialog" aria-modal="true" aria-labelledby="privacyTitle">
+  <div id="privacyOverlay" class="privacy-overlay" role="dialog" aria-modal="true" aria-hidden="true" aria-labelledby="privacyTitle">
     <div class="privacy-card">
       <h2 id="privacyTitle">How your ID is handled</h2>
       <p style="margin-top:0">
@@ -1413,7 +1442,7 @@ body{touch-action: pan-y pinch-zoom;}
         <li><b>Deletion:</b> once verification is completed, the ticket is closed and removed. Because transcripts only reference Discord attachment links (they don’t embed files), ID images won’t be accessible after the ticket is deleted.</li>
       </ul>
       <div class="privacy-actions">
-        <button type="button" class="btn btn-outline" onclick="closePrivacyModal()">Close</button>
+        <button id="privacyCloseBtn" type="button" class="btn btn-outline">Close</button>
       </div>
     </div>
   </div>
